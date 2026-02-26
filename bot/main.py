@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from config.logging import configure_logging
 from config.settings import get_settings
@@ -94,28 +95,33 @@ async def save_registration(message: Message, state: FSMContext) -> None:
         return
     data = await state.get_data()
     user_type = UserType.HORECA if data["user_type"] == "horeca" else UserType.RETAIL
-    async with SessionLocal() as session:
-        user = await session.get(User, message.from_user.id)
-        if user is None:
-            user = User(
-                id=message.from_user.id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name,
-                last_name=message.from_user.last_name,
-                user_type=user_type,
-                establishment=establishment,
-                registered_at=datetime.utcnow(),
-                last_activity=datetime.utcnow(),
-            )
-        else:
-            user.username = message.from_user.username
-            user.first_name = message.from_user.first_name
-            user.last_name = message.from_user.last_name
-            user.user_type = user_type
-            user.establishment = establishment
-            user.last_activity = datetime.utcnow()
-        session.add(user)
-        await session.commit()
+    try:
+        async with SessionLocal() as session:
+            user = await session.get(User, message.from_user.id)
+            if user is None:
+                user = User(
+                    id=message.from_user.id,
+                    username=message.from_user.username,
+                    first_name=message.from_user.first_name,
+                    last_name=message.from_user.last_name,
+                    user_type=user_type,
+                    establishment=establishment,
+                    registered_at=datetime.utcnow(),
+                    last_activity=datetime.utcnow(),
+                )
+            else:
+                user.username = message.from_user.username
+                user.first_name = message.from_user.first_name
+                user.last_name = message.from_user.last_name
+                user.user_type = user_type
+                user.establishment = establishment
+                user.last_activity = datetime.utcnow()
+            session.add(user)
+            await session.commit()
+    except SQLAlchemyError:
+        logging.exception("Database error during registration")
+        await message.answer("Сервис временно недоступен. Попробуйте снова через 1-2 минуты.")
+        return
     await state.clear()
     await message.answer(
         "✅ Регистрация завершена!\nТеперь вам доступно главное меню.",
@@ -124,22 +130,27 @@ async def save_registration(message: Message, state: FSMContext) -> None:
 
 
 async def _render_content(message: Message, model, title: str) -> None:
-    async with SessionLocal() as session:
-        user = await session.get(User, message.from_user.id)
-        if not user:
-            await message.answer("Сначала выполните регистрацию через /start")
-            return
-        query = (
-            select(model)
-            .where(
-                and_(
-                    model.is_active.is_(True),
-                    or_(model.user_type == user.user_type, model.user_type == UserType.ALL),
+    try:
+        async with SessionLocal() as session:
+            user = await session.get(User, message.from_user.id)
+            if not user:
+                await message.answer("Сначала выполните регистрацию через /start")
+                return
+            query = (
+                select(model)
+                .where(
+                    and_(
+                        model.is_active.is_(True),
+                        or_(model.user_type == user.user_type, model.user_type == UserType.ALL),
+                    )
                 )
+                .order_by(model.published_at.desc().nullslast(), model.created_at.desc())
             )
-            .order_by(model.published_at.desc().nullslast(), model.created_at.desc())
-        )
-        items = list((await session.scalars(query)).all())
+            items = list((await session.scalars(query)).all())
+    except SQLAlchemyError:
+        logging.exception("Database error while loading content")
+        await message.answer("Не удалось получить данные. Попробуйте позже.")
+        return
     if not items:
         await message.answer(f"{title}\nПока нет актуальных записей.")
         return
