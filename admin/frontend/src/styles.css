@@ -1,0 +1,80 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tabs button {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.active-tab {
+  background: #2563eb !important;
+  color: #fff;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+input,
+button {
+  padding: 8px 10px;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.theme-dark {
+  color: #e5e7eb;
+}
+
+.theme-dark .card {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.theme-dark input,
+.theme-dark button {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+}
