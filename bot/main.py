@@ -95,6 +95,7 @@ async def save_registration(message: Message, state: FSMContext) -> None:
         return
     data = await state.get_data()
     user_type = UserType.HORECA if data["user_type"] == "horeca" else UserType.RETAIL
+    user_type_label = "HoReCa" if user_type == UserType.HORECA else "Retail"
     try:
         async with SessionLocal() as session:
             user = await session.get(User, message.from_user.id)
@@ -124,7 +125,7 @@ async def save_registration(message: Message, state: FSMContext) -> None:
         return
     await state.clear()
     await message.answer(
-        "✅ Регистрация завершена!\nТеперь вам доступно главное меню.",
+        f"✅ Регистрация завершена!\nТеперь вы будете получать актуальную информацию для {user_type_label}.",
         reply_markup=menu_keyboard(),
     )
 

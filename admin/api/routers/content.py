@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api.deps import get_current_admin, verify_csrf
@@ -8,6 +8,15 @@ from database.models import AdminUser, Delivery, News, Promotion, UserType
 from database.session import get_db
 
 router = APIRouter(prefix="/api", tags=["content"])
+
+
+def ensure_manager_draft_only(admin: AdminUser, payload: dict) -> None:
+    if admin.role.value != "manager":
+        return
+    if payload.get("is_active") is True:
+        raise HTTPException(status_code=403, detail="Managers can only save drafts")
+    if payload.get("published_at") is not None:
+        raise HTTPException(status_code=403, detail="Managers cannot set publish date")
 
 
 @router.get("/promotions", response_model=list[ContentOut])
@@ -36,8 +45,9 @@ async def create_promotion(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> ContentOut:
-    _ = admin
-    return await create_content(Promotion, payload.model_dump(), db)
+    data = payload.model_dump()
+    ensure_manager_draft_only(admin, data)
+    return await create_content(Promotion, data, db)
 
 
 @router.post("/promotions/{item_id}/duplicate", response_model=ContentOut, dependencies=[Depends(verify_csrf)])
@@ -66,8 +76,9 @@ async def update_promotion(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> ContentOut:
-    _ = admin
-    return await update_content(Promotion, item_id, payload.model_dump(exclude_unset=True), db)
+    data = payload.model_dump(exclude_unset=True)
+    ensure_manager_draft_only(admin, data)
+    return await update_content(Promotion, item_id, data, db)
 
 
 @router.delete("/promotions/{item_id}", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
@@ -76,7 +87,8 @@ async def delete_promotion(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> GenericMessage:
-    _ = admin
+    if admin.role.value == "manager":
+        raise HTTPException(status_code=403, detail="Managers cannot delete published content")
     await delete_content(Promotion, item_id, db)
     return GenericMessage(message="deleted")
 
@@ -107,8 +119,9 @@ async def create_news(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> ContentOut:
-    _ = admin
-    return await create_content(News, payload.model_dump(), db)
+    data = payload.model_dump()
+    ensure_manager_draft_only(admin, data)
+    return await create_content(News, data, db)
 
 
 @router.put("/news/{item_id}", response_model=ContentOut, dependencies=[Depends(verify_csrf)])
@@ -118,8 +131,9 @@ async def update_news(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> ContentOut:
-    _ = admin
-    return await update_content(News, item_id, payload.model_dump(exclude_unset=True), db)
+    data = payload.model_dump(exclude_unset=True)
+    ensure_manager_draft_only(admin, data)
+    return await update_content(News, item_id, data, db)
 
 
 @router.delete("/news/{item_id}", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
@@ -128,7 +142,8 @@ async def delete_news(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> GenericMessage:
-    _ = admin
+    if admin.role.value == "manager":
+        raise HTTPException(status_code=403, detail="Managers cannot delete published content")
     await delete_content(News, item_id, db)
     return GenericMessage(message="deleted")
 
@@ -159,8 +174,9 @@ async def create_delivery(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> ContentOut:
-    _ = admin
-    return await create_content(Delivery, payload.model_dump(), db)
+    data = payload.model_dump()
+    ensure_manager_draft_only(admin, data)
+    return await create_content(Delivery, data, db)
 
 
 @router.put("/deliveries/{item_id}", response_model=ContentOut, dependencies=[Depends(verify_csrf)])
@@ -170,8 +186,9 @@ async def update_delivery(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> ContentOut:
-    _ = admin
-    return await update_content(Delivery, item_id, payload.model_dump(exclude_unset=True), db)
+    data = payload.model_dump(exclude_unset=True)
+    ensure_manager_draft_only(admin, data)
+    return await update_content(Delivery, item_id, data, db)
 
 
 @router.delete("/deliveries/{item_id}", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
@@ -180,6 +197,7 @@ async def delete_delivery(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ) -> GenericMessage:
-    _ = admin
+    if admin.role.value == "manager":
+        raise HTTPException(status_code=403, detail="Managers cannot delete published content")
     await delete_content(Delivery, item_id, db)
     return GenericMessage(message="deleted")

@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from admin.api.deps import get_current_admin, verify_csrf
+from admin.api.deps import get_current_admin, require_roles, verify_csrf
 from admin.api.schemas import GenericMessage, UserCreate, UserOut, UserStatsOut, UserUpdate
 from admin.api.services import users_csv
 from database.models import ActivityLog, AdminUser, User, UserType
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 async def create_user(
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(get_current_admin),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> UserOut:
     user = User(**payload.model_dump())
     db.add(user)
@@ -31,7 +31,7 @@ async def list_users(
     user_type: UserType | None = Query(default=None),
     search: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(get_current_admin),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> list[UserOut]:
     _ = admin
     query = select(User).order_by(User.registered_at.desc())
@@ -45,7 +45,7 @@ async def list_users(
 @router.get("/stats", response_model=UserStatsOut)
 async def users_stats(
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(get_current_admin),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> UserStatsOut:
     _ = admin
     total = await db.scalar(select(func.count(User.id))) or 0
@@ -58,7 +58,7 @@ async def users_stats(
 @router.get("/export")
 async def export_users(
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(get_current_admin),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> StreamingResponse:
     _ = admin
     users = list((await db.scalars(select(User))).all())

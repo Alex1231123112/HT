@@ -42,7 +42,9 @@ async def create_mailing(
     admin: AdminUser = Depends(get_current_admin),
 ) -> MailingOut:
     status_value = MailingStatus.SCHEDULED if payload.scheduled_at else MailingStatus.DRAFT
-    mailing = Mailing(**payload.model_dump(), status=status_value)
+    raw_payload = payload.model_dump()
+    raw_payload.pop("speed", None)
+    mailing = Mailing(**raw_payload, status=status_value)
     db.add(mailing)
     await db.flush()
     db.add(ActivityLog(admin_id=admin.id, action="create_mailing", details=f"mailing={mailing.id}"))
@@ -102,7 +104,7 @@ async def preview_mailing(
 async def send_mailing(
     mailing_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(require_roles("superadmin", "admin", "manager")),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> GenericMessage:
     mailing = await db.get(Mailing, mailing_id)
     if not mailing:
@@ -136,7 +138,7 @@ async def cancel_mailing(
 async def retry_mailing(
     mailing_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(require_roles("superadmin", "admin", "manager")),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> GenericMessage:
     mailing = await db.get(Mailing, mailing_id)
     if not mailing:
@@ -147,6 +149,20 @@ async def retry_mailing(
     db.add(ActivityLog(admin_id=admin.id, action="retry_mailing", details=f"mailing={mailing_id}, count={recipients}"))
     await db.commit()
     return GenericMessage(message="retried", data={"recipients": recipients})
+
+
+@router.post("/{mailing_id}/test-send", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
+async def test_send_mailing(
+    mailing_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+) -> GenericMessage:
+    mailing = await db.get(Mailing, mailing_id)
+    if not mailing:
+        raise HTTPException(status_code=404, detail="Mailing not found")
+    db.add(ActivityLog(admin_id=admin.id, action="test_send_mailing", details=f"mailing={mailing_id}"))
+    await db.commit()
+    return GenericMessage(message="test_sent", data={"mailing_id": mailing_id})
 
 
 @router.get("/{mailing_id}/stats", response_model=GenericMessage)

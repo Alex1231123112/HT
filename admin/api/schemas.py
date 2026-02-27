@@ -1,14 +1,17 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from database.models import MailingStatus, MailingTarget, MediaType, UserType
+from database.models import AdminRole, MailingStatus, MailingTarget, MediaType, UserType
 
 
 class LoginRequest(BaseModel):
-    username: str
+    username: str | None = None
+    email: str | None = None
+    identifier: str | None = None
     password: str
+    remember_me: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -85,6 +88,7 @@ class MailingCreate(BaseModel):
     target_type: MailingTarget
     custom_targets: list[int] | None = None
     scheduled_at: datetime | None = None
+    speed: str | None = "medium"
 
 
 class MailingUpdate(BaseModel):
@@ -122,6 +126,13 @@ class StatsOut(BaseModel):
     retail: int
     active_content: int
     total_mailings: int
+    new_today: int = 0
+    new_week: int = 0
+    new_month: int = 0
+    mailings_month: int = 0
+    active_promotions: int = 0
+    active_news: int = 0
+    active_deliveries: int = 0
 
 
 class UserStatsOut(BaseModel):
@@ -143,3 +154,30 @@ class SettingBatch(BaseModel):
 class GenericMessage(BaseModel):
     message: str
     data: dict[str, Any] | None = None
+
+
+class AdminCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=100)
+    email: str | None = None
+    password: str = Field(min_length=8, max_length=128)
+    role: AdminRole = AdminRole.MANAGER
+
+
+class AdminUpdate(BaseModel):
+    email: str | None = None
+    role: AdminRole | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+class AdminOut(BaseModel):
+    id: int
+    username: str
+    email: str | None = None
+    role: AdminRole
+    is_active: bool
+    created_at: datetime
+    last_login: datetime | None = None
+
+    class Config:
+        from_attributes = True

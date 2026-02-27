@@ -12,6 +12,11 @@
 - `GET /dashboard/users-chart`
 - `GET /dashboard/activity`
 
+`/dashboard/stats` дополнительно возвращает:
+- `new_today`, `new_week`, `new_month`
+- `mailings_month`
+- `active_promotions`, `active_news`, `active_deliveries`
+
 ## Пользователи
 - `POST /users`
 - `GET /users`
@@ -47,6 +52,7 @@
 - `PUT /mailings/{id}`
 - `DELETE /mailings/{id}`
 - `POST /mailings/{id}/preview`
+- `POST /mailings/{id}/test-send`
 - `POST /mailings/{id}/send`
 - `POST /mailings/{id}/cancel`
 - `POST /mailings/{id}/retry`
@@ -56,10 +62,19 @@
 - `GET /analytics/users`
 - `GET /analytics/mailings`
 - `GET /analytics/content`
+- `GET /analytics/cohort`
+- `GET /analytics/conversions`
 - `GET /analytics/export`
+- `GET /admins`
+- `POST /admins`
+- `PUT /admins/{id}`
+- `DELETE /admins/{id}`
 - `GET /settings`
 - `PUT /settings`
 - `POST /settings/backup`
+- `PUT /settings/backup-policy`
+- `POST /settings/restore/{filename}?dry_run=true|false`
 - `GET /settings/backups`
+- `GET /settings/backups/{filename}`
 - `GET /logs`
 - `GET /logs/export`

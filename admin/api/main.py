@@ -1,13 +1,16 @@
 import asyncio
 import contextlib
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 
 from admin.api.routers.analytics import router as analytics_router
+from admin.api.routers.admins import router as admins_router
 from admin.api.routers.auth import router as auth_router
 from admin.api.routers.content import router as content_router
 from admin.api.routers.dashboard import router as dashboard_router
@@ -25,6 +28,8 @@ from database.session import SessionLocal
 
 settings = get_settings()
 configure_logging()
+if settings.app_env.lower() == "prod" and not settings.cors_origins:
+    raise RuntimeError("No valid CORS origins are configured for production")
 app = FastAPI(title="Bot Admin API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +38,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+upload_root = Path(settings.upload_dir)
+upload_root.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=upload_root), name="uploads")
 
 REQ_COUNT = Counter("api_requests_total", "Total API requests", ["path", "method"])
 REQ_LATENCY = Histogram("api_latency_seconds", "API latency", ["path", "method"])
@@ -81,6 +89,7 @@ async def metrics() -> PlainTextResponse:
     return PlainTextResponse(generate_latest().decode("utf-8"))
 
 app.include_router(auth_router)
+app.include_router(admins_router)
 app.include_router(dashboard_router)
 app.include_router(users_router)
 app.include_router(content_router)

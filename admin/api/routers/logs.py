@@ -16,12 +16,18 @@ router = APIRouter(prefix="/api/logs", tags=["logs"])
 async def logs(
     limit: int = Query(default=100, le=500),
     db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(get_current_admin),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> GenericMessage:
     _ = admin
     rows = list((await db.scalars(select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(limit))).all())
     data = [
-        {"id": row.id, "action": row.action, "details": row.details, "created_at": row.created_at.isoformat()}
+        {
+            "id": row.id,
+            "admin_id": row.admin_id,
+            "action": row.action,
+            "details": row.details,
+            "created_at": row.created_at.isoformat(),
+        }
         for row in rows
     ]
     return GenericMessage(message="ok", data={"items": data})

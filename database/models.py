@@ -7,6 +7,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database.base import Base
 
 
+def enum_values(enum_cls: type[StrEnum]) -> list[str]:
+    return [item.value for item in enum_cls]
+
+
 class UserType(StrEnum):
     HORECA = "horeca"
     RETAIL = "retail"
@@ -46,7 +50,7 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="user_type"))
+    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="user_type", values_callable=enum_values))
     establishment: Mapped[str] = mapped_column(String(255))
     registered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -60,7 +64,7 @@ class Promotion(Base):
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="promo_user_type"))
+    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="promo_user_type", values_callable=enum_values))
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -74,7 +78,7 @@ class News(Base):
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="news_user_type"))
+    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="news_user_type", values_callable=enum_values))
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -88,7 +92,7 @@ class Delivery(Base):
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="delivery_user_type"))
+    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="delivery_user_type", values_callable=enum_values))
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -101,12 +105,18 @@ class Mailing(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     text: Mapped[str] = mapped_column(Text)
     media_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    media_type: Mapped[MediaType] = mapped_column(Enum(MediaType, name="mailing_media_type"), default=MediaType.NONE)
-    target_type: Mapped[MailingTarget] = mapped_column(Enum(MailingTarget, name="mailing_target_type"))
+    media_type: Mapped[MediaType] = mapped_column(
+        Enum(MediaType, name="mailing_media_type", values_callable=enum_values), default=MediaType.NONE
+    )
+    target_type: Mapped[MailingTarget] = mapped_column(
+        Enum(MailingTarget, name="mailing_target_type", values_callable=enum_values)
+    )
     custom_targets: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    status: Mapped[MailingStatus] = mapped_column(Enum(MailingStatus, name="mailing_status"), default=MailingStatus.DRAFT)
+    status: Mapped[MailingStatus] = mapped_column(
+        Enum(MailingStatus, name="mailing_status", values_callable=enum_values), default=MailingStatus.DRAFT
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     send_attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -133,8 +143,9 @@ class AdminUser(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(100), unique=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[AdminRole] = mapped_column(Enum(AdminRole, name="admin_role"))
+    role: Mapped[AdminRole] = mapped_column(Enum(AdminRole, name="admin_role", values_callable=enum_values))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
