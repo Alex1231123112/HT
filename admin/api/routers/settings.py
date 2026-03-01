@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from admin.api.deps import get_current_admin, require_roles, verify_csrf
+from admin.api.deps import require_roles, verify_csrf
 from admin.api.schemas import GenericMessage, SettingBatch
 from config.settings import get_settings
 from database.models import ActivityLog, AdminUser, SystemSetting

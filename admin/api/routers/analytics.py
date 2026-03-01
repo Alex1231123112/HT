@@ -16,16 +16,25 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
 @router.get("/users", response_model=GenericMessage)
-async def analytics_users(db: AsyncSession = Depends(get_db), admin: AdminUser = Depends(get_current_admin)) -> GenericMessage:
+async def analytics_users(
+    period_days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+) -> GenericMessage:
     _ = admin
     now = datetime.utcnow()
-    month_ago = now - timedelta(days=30)
+    period_ago = now - timedelta(days=period_days)
+    prev_period_ago = now - timedelta(days=period_days * 2)
     by_type = {
         "total": await db.scalar(select(func.count(User.id))) or 0,
         "horeca": await db.scalar(select(func.count(User.id)).where(User.user_type == UserType.HORECA)) or 0,
         "retail": await db.scalar(select(func.count(User.id)).where(User.user_type == UserType.RETAIL)) or 0,
-        "new_month": await db.scalar(select(func.count(User.id)).where(User.registered_at >= month_ago)) or 0,
+        "new_month": await db.scalar(select(func.count(User.id)).where(User.registered_at >= period_ago)) or 0,
         "active": await db.scalar(select(func.count(User.id)).where(User.is_active.is_(True))) or 0,
+        "new_previous_period": (
+            await db.scalar(select(func.count(User.id)).where(User.registered_at >= prev_period_ago, User.registered_at < period_ago))
+            or 0
+        ),
     }
     return GenericMessage(message="ok", data=by_type)
 
@@ -79,10 +88,23 @@ async def analytics_cohort(
     _ = admin
     users = list((await db.scalars(select(User).where(User.registered_at.is_not(None)))).all())
     grouped: dict[str, int] = defaultdict(int)
+    retained_7d: dict[str, int] = defaultdict(int)
     for user in users:
         key = user.registered_at.strftime("%Y-%m")
         grouped[key] += 1
-    rows = [{"cohort": key, "users": value} for key, value in sorted(grouped.items())]
+        if user.last_activity and user.last_activity >= user.registered_at + timedelta(days=7):
+            retained_7d[key] += 1
+    rows = []
+    for key, value in sorted(grouped.items()):
+        retained = retained_7d.get(key, 0)
+        rows.append(
+            {
+                "cohort": key,
+                "users": value,
+                "retained_7d": retained,
+                "retention_7d": round((retained / value) * 100, 2) if value else 0,
+            }
+        )
     return GenericMessage(message="ok", data={"rows": rows})
 
 

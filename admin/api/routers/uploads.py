@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,16 +14,31 @@ settings = get_settings()
 UPLOAD_DIR = Path(settings.upload_dir)
 
 
-def _detect_file_type(raw: bytes) -> str | None:
-    if raw.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if len(raw) >= 12 and raw[0:4] == b"RIFF" and raw[8:12] == b"WEBP":
-        return "image/webp"
-    if b"ftyp" in raw[4:16]:
-        return "video/mp4"
-    return None
+def _upload_to_s3_sync(bucket: str, key: str, body: bytes, content_type: str) -> None:
+    import boto3
+    from botocore.config import Config
+
+    client_kw: dict = {
+        "service_name": "s3",
+        "aws_access_key_id": settings.s3_access_key_id,
+        "aws_secret_access_key": settings.s3_secret_access_key,
+        "config": Config(signature_version="s3v4"),
+    }
+    if settings.s3_region:
+        client_kw["region_name"] = settings.s3_region
+    if settings.s3_endpoint_url:
+        client_kw["endpoint_url"] = settings.s3_endpoint_url
+    client = boto3.client(**client_kw)
+    client.put_object(Bucket=bucket, Key=key, Body=body, ContentType=content_type)
+
+
+def _safe_extension(filename: str | None) -> str:
+    """Расширение из имени файла или .bin."""
+    if filename and "." in filename:
+        ext = filename[filename.rfind(".") :].lower()
+        if len(ext) <= 10 and ext.replace(".", "").isalnum():
+            return ext
+    return ".bin"
 
 
 @router.post("/upload", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
@@ -34,27 +50,36 @@ async def upload_file(
     raw = await file.read()
     if len(raw) > settings.max_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large")
-    allowed = {"image/jpeg", "image/png", "image/webp", "video/mp4"}
-    if file.content_type not in allowed:
-        raise HTTPException(status_code=400, detail="Invalid MIME type")
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".mp4"}
-    if file.filename and "." in file.filename:
-        extension = file.filename[file.filename.rfind(".") :].lower()
-        if extension not in allowed_extensions:
-            raise HTTPException(status_code=400, detail="Invalid file extension")
-    detected = _detect_file_type(raw)
-    if not detected:
-        raise HTTPException(status_code=400, detail="Cannot detect file type")
-    if file.content_type and file.content_type != detected:
-        raise HTTPException(status_code=400, detail="MIME mismatch")
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    ext = extension if file.filename and "." in file.filename else {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-        "video/mp4": ".mp4",
-    }[detected]
+    ext = _safe_extension(file.filename)
     safe_name = f"{uuid4().hex}{ext}"
+
+    if settings.use_s3:
+        bucket = settings.s3_bucket or ""
+        key = f"uploads/{safe_name}"
+        content_type = file.content_type or "application/octet-stream"
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: _upload_to_s3_sync(bucket, key, raw, content_type),
+        )
+        if settings.s3_public_base_url:
+            base = settings.s3_public_base_url.rstrip("/")
+        elif settings.s3_endpoint_url:
+            base = f"{settings.s3_endpoint_url.rstrip('/')}/{bucket}"
+        else:
+            region = settings.s3_region or "us-east-1"
+            base = f"https://{bucket}.s3.{region}.amazonaws.com"
+        public_url = f"{base}/{key}"
+        return GenericMessage(
+            message="uploaded",
+            data={"filename": safe_name, "size": len(raw), "url": public_url},
+        )
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     target = UPLOAD_DIR / safe_name
     target.write_bytes(raw)
-    return GenericMessage(message="uploaded", data={"filename": safe_name, "size": len(raw)})
+    base_url = (settings.upload_base_url or "").rstrip("/")
+    local_url = f"{base_url}/{safe_name}" if base_url else f"/uploads/{safe_name}"
+    return GenericMessage(
+        message="uploaded",
+        data={"filename": safe_name, "size": len(raw), "url": local_url},
+    )

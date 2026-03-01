@@ -6,7 +6,12 @@
     <title>Admin Panel</title>
   </head>
   <body>
-    <div id="root"></div>
+    <script>
+      window.__API_URL__ = window.__API_URL__ || "http://localhost:8000/api";
+    </script>
+    <div id="root">
+      <p style="margin: 2rem; font-family: sans-serif; color: #333;">Загрузка админки…</p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

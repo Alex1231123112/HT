@@ -1,4 +1,33 @@
 services:
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb myminio/uploads --ignore-existing;
+      mc anonymous set download myminio/uploads;
+      echo 'Bucket uploads ready';
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
   db:
     image: postgres:15
     restart: unless-stopped
@@ -22,9 +51,19 @@ services:
       dockerfile: deploy/Dockerfile.api
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
+      S3_BUCKET: uploads
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_ENDPOINT_URL: http://minio:9000
+      # Публичный URL медиа: с хоста браузера/бота (подставьте свой домен при деплое)
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000/uploads}
     depends_on:
       db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -35,6 +74,10 @@ services:
       dockerfile: deploy/Dockerfile.bot
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
+      # URL медиа, доступный из интернета (Telegram скачивает по нему файлы). Без этого картинки/видео в боте не отображаются.
+      UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-}
     depends_on:
       db:
         condition: service_healthy
@@ -52,3 +95,4 @@ services:
 
 volumes:
   pg_data:
+  minio_data:

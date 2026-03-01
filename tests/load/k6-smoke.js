@@ -4,6 +4,9 @@ import { check } from "k6";
 export const options = {
   vus: 20,
   duration: "30s",
+  thresholds: {
+    "http_req_duration": ["p(95)<0.5"],
+  },
 };
 
 export default function () {

@@ -1,12 +1,43 @@
 import type { AccessControlProvider, AuthProvider, DataProvider, HttpError } from "@refinedev/core";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api";
+const DEFAULT_API_URL = "http://localhost:8000/api";
 const CSRF_TOKEN = import.meta.env.VITE_CSRF_TOKEN ?? "dev-csrf";
 const TOKEN_KEY = "token";
+
+declare global {
+  interface Window {
+    __API_URL__?: string;
+  }
+}
+
+export function getApiUrl(): string {
+  if (typeof window !== "undefined" && window.__API_URL__) return window.__API_URL__;
+  return import.meta.env.VITE_API_URL ?? DEFAULT_API_URL;
+}
 
 type WrappedResponse<T = unknown> = { message?: string; data?: T };
 
 const readToken = () => localStorage.getItem(TOKEN_KEY) ?? "";
+
+/** Загрузка файла на сервер (локально или S3). Не передаёт Content-Type, чтобы браузер подставил boundary. */
+export async function uploadContentFile(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const token = readToken();
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "X-CSRF-Token": CSRF_TOKEN,
+  };
+  const res = await fetch(`${getApiUrl()}/upload`, { method: "POST", headers, body: formData });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(err.detail ?? `Ошибка загрузки: ${res.status}`);
+  }
+  const data = (await res.json()) as { data?: { url?: string; filename?: string } };
+  const url = data.data?.url ?? (data.data?.filename ? `/uploads/${data.data.filename}` : "");
+  if (!url) throw new Error("Нет URL в ответе");
+  return { url };
+}
 
 const request = async <T = unknown>(path: string, init?: RequestInit, csrf = false): Promise<T> => {
   const token = readToken();
@@ -17,7 +48,7 @@ const request = async <T = unknown>(path: string, init?: RequestInit, csrf = fal
     ...(init?.headers ?? {}),
   };
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${getApiUrl()}${path}`, { ...init, headers });
   const contentType = response.headers.get("content-type") ?? "";
   const isJson = contentType.includes("application/json");
 
@@ -47,6 +78,7 @@ const unwrapData = <T>(payload: unknown): T => {
 const toResourcePath = (resource: string) => {
   if (resource === "settings") return "/settings";
   if (resource === "logs") return "/logs";
+  if (resource === "content_plan") return "/content-plan";
   return `/${resource}`;
 };
 
@@ -62,8 +94,15 @@ export const dataProvider: DataProvider = {
       const list = Object.entries(data).map(([key, value]) => ({ id: key, key, value }));
       return { data: list, total: list.length };
     }
-    const list = payload as unknown[];
-    return { data: list as any[], total: list.length };
+    // API может вернуть массив напрямую или обёртку { data, total }
+    if (Array.isArray(payload)) {
+      return { data: payload as Record<string, unknown>[], total: payload.length };
+    }
+    if (payload && typeof payload === "object" && "data" in (payload as object)) {
+      const wrapped = payload as { data: unknown[]; total?: number };
+      return { data: wrapped.data ?? [], total: wrapped.total ?? wrapped.data?.length ?? 0 };
+    }
+    return { data: [], total: 0 };
   },
   getOne: async ({ resource, id }) => {
     if (resource === "settings") {
@@ -72,13 +111,13 @@ export const dataProvider: DataProvider = {
       return { data: { id: String(id), key: String(id), value: data[String(id)] ?? "" } };
     }
     const payload = await request<unknown>(`${toResourcePath(resource)}/${id}`);
-    return { data: payload as any };
+    return { data: payload as Record<string, unknown> };
   },
   create: async ({ resource, variables }) => {
     if (resource === "settings") {
       const items = Object.entries(variables as Record<string, string>).map(([key, value]) => ({ key, value }));
       await request("/settings", { method: "PUT", body: JSON.stringify({ items }) }, true);
-      return { data: { ...variables } as any };
+      return { data: { ...(variables as Record<string, unknown>) } };
     }
     const payload = await request<unknown>(
       toResourcePath(resource),
@@ -88,13 +127,13 @@ export const dataProvider: DataProvider = {
       },
       true,
     );
-    return { data: payload as any };
+    return { data: payload as Record<string, unknown> };
   },
   update: async ({ resource, id, variables }) => {
     if (resource === "settings") {
       const item = variables as { key: string; value: string };
       await request("/settings", { method: "PUT", body: JSON.stringify({ items: [{ key: item.key, value: item.value }] }) }, true);
-      return { data: { id: item.key, ...item } as any };
+      return { data: { id: item.key, ...item } };
     }
     const payload = await request<unknown>(
       `${toResourcePath(resource)}/${id}`,
@@ -104,13 +143,13 @@ export const dataProvider: DataProvider = {
       },
       true,
     );
-    return { data: payload as any };
+    return { data: payload as Record<string, unknown> };
   },
   deleteOne: async ({ resource, id }) => {
     const payload = await request<unknown>(`${toResourcePath(resource)}/${id}`, { method: "DELETE" }, true);
-    return { data: ((payload as Record<string, unknown>) ?? { id }) as any };
+    return { data: ((payload as Record<string, unknown>) ?? { id: String(id) }) };
   },
-  getApiUrl: () => API_URL,
+  getApiUrl: () => getApiUrl(),
   custom: async ({ url, method, payload, query }) => {
     const search = query ? `?${new URLSearchParams(query as Record<string, string>).toString()}` : "";
     const response = await request<unknown>(
@@ -121,7 +160,7 @@ export const dataProvider: DataProvider = {
       },
       method !== "get",
     );
-    return { data: unwrapData<Record<string, unknown>>(response) as any };
+    return { data: unwrapData<Record<string, unknown>>(response) };
   },
 } as DataProvider;
 
@@ -153,9 +192,9 @@ export const authProvider: AuthProvider = {
     return { success: true, redirectTo: "/login" };
   },
   check: async () => {
-    const token = readToken();
-    if (!token) return { authenticated: false, redirectTo: "/login" };
     try {
+      const token = readToken();
+      if (!token) return { authenticated: false, redirectTo: "/login" };
       await request("/auth/me");
       return { authenticated: true };
     } catch {
@@ -191,11 +230,20 @@ export const accessControlProvider: AccessControlProvider = {
     if (resource === "settings" || resource === "admins") {
       return { can: role === "superadmin" };
     }
-    if (resource === "users" || resource === "logs") {
+    if (resource === "users" || resource === "logs" || resource === "managers" || resource === "establishments") {
       return { can: role === "superadmin" || role === "admin" };
     }
     if (resource === "mailings" && (action === "delete" || action === "create" || action === "edit")) {
       return { can: role !== "manager" };
+    }
+    if (resource === "channels" && action === "delete") {
+      return { can: role === "superadmin" || role === "admin" };
+    }
+    if (resource === "content_plan" && (action === "delete" || action === "edit")) {
+      return { can: role === "superadmin" || role === "admin" };
+    }
+    if (resource === "events" && action === "delete") {
+      return { can: role === "superadmin" || role === "admin" };
     }
     return { can: true };
   },

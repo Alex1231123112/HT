@@ -45,6 +45,15 @@
 - `DELETE /deliveries/{id}`
 - `POST /upload`
 
+## Мероприятия (events)
+- `GET /events` — список (опционально: `user_type`)
+- `GET /events/{id}`
+- `POST /events` — создать (title, description, image_url, user_type, event_date, location, is_active)
+- `PUT /events/{id}`
+- `DELETE /events/{id}`
+
+Пользователи (users) дополнительно поддерживают поля: `phone_number`, `full_name`, `birth_date`, `position`; поиск по ним в `GET /users?search=...`.
+
 ## Рассылки
 - `GET /mailings`
 - `GET /mailings/{id}`

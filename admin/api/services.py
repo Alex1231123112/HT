@@ -32,8 +32,27 @@ async def get_content_by_id(model, item_id: int, db: AsyncSession):
     return item
 
 
+def _normalize_content_payload(payload: dict) -> dict:
+    """Приводит payload к типам, ожидаемым ORM (user_type — enum, published_at — datetime | None)."""
+    from datetime import datetime as dt
+
+    out = dict(payload)
+    if "user_type" in out and isinstance(out["user_type"], str):
+        out["user_type"] = UserType(out["user_type"])
+    if "published_at" in out and out["published_at"] is not None and isinstance(out["published_at"], str):
+        try:
+            out["published_at"] = dt.fromisoformat(out["published_at"].replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            out["published_at"] = None
+    return out
+
+
 async def create_content(model, payload: dict, db: AsyncSession):
-    item = model(**payload)
+    data = _normalize_content_payload(payload)
+    # Только атрибуты, которые есть у модели (без id — автоинкремент)
+    allowed = set(model.__table__.c.keys()) - {"id"}
+    data = {k: v for k, v in data.items() if k in allowed}
+    item = model(**data)
     db.add(item)
     await db.commit()
     await db.refresh(item)
@@ -97,23 +116,40 @@ async def content_count(db: AsyncSession) -> int:
     )
 
 
+def _csv_escape(s: str | None) -> str:
+    if not s:
+        return ""
+    s = str(s).replace('"', '""')
+    return f'"{s}"' if "," in s or "\n" in s or '"' in s else s
+
+
 def users_csv(users: list[User]) -> str:
     buff = StringIO()
-    buff.write("id,username,user_type,establishment,registered_at\n")
+    buff.write(
+        "id,username,first_name,last_name,phone_number,full_name,birth_date,position,"
+        "user_type,establishment,registered_at,last_activity,is_active,deleted_at\n"
+    )
     for user in users:
         registered_at = user.registered_at.isoformat() if user.registered_at else ""
+        last_activity = user.last_activity.isoformat() if user.last_activity else ""
+        deleted_at = user.deleted_at.isoformat() if user.deleted_at else ""
+        birth_date = user.birth_date.isoformat() if user.birth_date else ""
         buff.write(
-            f"{user.id},{user.username or ''},{user.user_type.value},"
-            f"{user.establishment},{registered_at}\n"
+            f"{user.id},{_csv_escape(user.username)},{_csv_escape(user.first_name)},{_csv_escape(user.last_name)},"
+            f"{_csv_escape(user.phone_number)},{_csv_escape(user.full_name)},{birth_date},{_csv_escape(user.position)},"
+            f"{user.user_type.value},{_csv_escape(user.establishment)},{registered_at},{last_activity},"
+            f"{user.is_active},{deleted_at}\n"
         )
     return buff.getvalue()
 
 
 def logs_csv(log_rows: list[dict]) -> str:
     buff = StringIO()
-    buff.write("id,action,details,created_at\n")
+    buff.write("id,admin_id,action,details,created_at\n")
     for row in log_rows:
-        buff.write(f"{row['id']},{row['action']},{row['details'] or ''},{row['created_at']}\n")
+        buff.write(
+            f"{row['id']},{row.get('admin_id') or ''},{row['action']},{row['details'] or ''},{row['created_at']}\n"
+        )
     return buff.getvalue()
 
 

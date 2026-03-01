@@ -1,16 +1,16 @@
-from admin.api.routers.uploads import _detect_file_type
+from admin.api.routers.uploads import _safe_extension
 
 
-def test_detect_jpeg_signature():
-    payload = b"\xff\xd8\xff\xee" + b"0" * 20
-    assert _detect_file_type(payload) == "image/jpeg"
+def test_safe_extension_from_filename():
+    assert _safe_extension("photo.jpg") == ".jpg"
+    assert _safe_extension("doc.PDF") == ".pdf"
+    assert _safe_extension("file.mp4") == ".mp4"
 
 
-def test_detect_png_signature():
-    payload = b"\x89PNG\r\n\x1a\n" + b"0" * 20
-    assert _detect_file_type(payload) == "image/png"
+def test_safe_extension_no_extension():
+    assert _safe_extension("noext") == ".bin"
+    assert _safe_extension(None) == ".bin"
 
 
-def test_detect_unsupported_signature():
-    payload = b"random-bytes"
-    assert _detect_file_type(payload) is None
+def test_safe_extension_long_extension_gets_bin():
+    assert _safe_extension("file.abcdefghijk") == ".bin"

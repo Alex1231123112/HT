@@ -22,11 +22,15 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, extra: dict[str, Any] | None = None) -> str:
+def create_access_token(
+    subject: str,
+    extra: dict[str, Any] | None = None,
+    expires_minutes: int | None = None,
+) -> str:
     settings = get_settings()
     payload: dict[str, Any] = {
         "sub": subject,
-        "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=settings.jwt_expires_minutes),
+        "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=expires_minutes or settings.jwt_expires_minutes),
     }
     if extra:
         payload.update(extra)

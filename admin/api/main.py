@@ -9,20 +9,25 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 
-from admin.api.routers.analytics import router as analytics_router
 from admin.api.routers.admins import router as admins_router
+from admin.api.routers.analytics import router as analytics_router
 from admin.api.routers.auth import router as auth_router
 from admin.api.routers.content import router as content_router
 from admin.api.routers.dashboard import router as dashboard_router
+from admin.api.routers.events import router as events_router
 from admin.api.routers.logs import router as logs_router
 from admin.api.routers.mailings import process_due_mailings
 from admin.api.routers.mailings import router as mailings_router
 from admin.api.routers.settings import router as settings_router
 from admin.api.routers.uploads import router as uploads_router
 from admin.api.routers.users import router as users_router
+from admin.api.routers.establishments import router as establishments_router
+from admin.api.routers.channels import router as channels_router
+from admin.api.routers.content_plan import router as content_plan_router
 from admin.api.schemas import GenericMessage
 from config.logging import configure_logging
 from config.settings import get_settings
+from database.models import User
 from database.seed import ensure_default_admin
 from database.session import SessionLocal
 
@@ -56,10 +61,22 @@ async def metrics_middleware(request: Request, call_next):
     return response
 
 
+def _redact_db_url(url: str) -> str:
+    if "@" in url:
+        return url.split("@", 1)[-1]
+    return url.replace("sqlite", "sqlite***")
+
+
 @app.on_event("startup")
 async def startup() -> None:
+    import logging
+    from sqlalchemy import func, select
+    log = logging.getLogger("uvicorn.error")
+    log.info("API DB: %s", _redact_db_url(settings.database_url))
     async with SessionLocal() as session:
         await ensure_default_admin(session)
+        n = await session.scalar(select(func.count(User.id))) or 0
+        log.info("API startup: users in DB = %s", n)
     global _scheduler_task
     _scheduler_task = asyncio.create_task(_scheduled_mailing_worker())
 
@@ -92,7 +109,11 @@ app.include_router(auth_router)
 app.include_router(admins_router)
 app.include_router(dashboard_router)
 app.include_router(users_router)
+app.include_router(establishments_router)
+app.include_router(channels_router)
+app.include_router(content_plan_router)
 app.include_router(content_router)
+app.include_router(events_router)
 app.include_router(uploads_router)
 app.include_router(mailings_router)
 app.include_router(analytics_router)

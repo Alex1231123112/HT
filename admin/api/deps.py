@@ -1,6 +1,6 @@
 import hmac
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,16 +10,20 @@ from config.settings import get_settings
 from database.models import ActivityLog, AdminUser
 from database.session import get_db
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_admin(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> AdminUser:
-    if is_token_revoked(credentials.credentials):
+    token = credentials.credentials if credentials else request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+    if is_token_revoked(token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
-    payload = decode_access_token(credentials.credentials)
+    payload = decode_access_token(token)
     username = payload.get("sub")
     if not username:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCustom } from "@refinedev/core";
+import { getApiUrl } from "../refine/providers";
 
 export function AnalyticsPage() {
   const { result: usersResp } = useCustom<Record<string, number>>({ url: "/analytics/users", method: "get" });
@@ -13,7 +14,7 @@ export function AnalyticsPage() {
   const cohortRows = cohortResp?.data?.rows ?? [];
   const conversionAnalytics = conversionResp?.data ?? {};
   const exportAnalytics = async () => {
-    const response = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8000/api"}/analytics/export`, {
+    const response = await fetch(`${getApiUrl()}/analytics/export`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
     });
     const content = await response.text();

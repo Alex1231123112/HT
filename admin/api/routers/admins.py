@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from admin.api.deps import get_current_admin, require_roles, verify_csrf
+from admin.api.deps import require_roles, verify_csrf
 from admin.api.schemas import AdminCreate, AdminOut, AdminUpdate, GenericMessage
 from admin.api.security import hash_password
 from database.models import ActivityLog, AdminUser
@@ -82,8 +82,32 @@ async def update_admin(
         else:
             item.email = None
     if payload.role is not None:
+        if item.role.value == "superadmin" and payload.role.value != "superadmin":
+            active_superadmins = (
+                await db.scalar(
+                    select(func.count(AdminUser.id)).where(
+                        AdminUser.role == item.role,
+                        AdminUser.is_active.is_(True),
+                    )
+                )
+                or 0
+            )
+            if active_superadmins <= 1:
+                raise HTTPException(status_code=400, detail="Cannot remove last active superadmin role")
         item.role = payload.role
     if payload.is_active is not None:
+        if item.role.value == "superadmin" and payload.is_active is False:
+            active_superadmins = (
+                await db.scalar(
+                    select(func.count(AdminUser.id)).where(
+                        AdminUser.role == item.role,
+                        AdminUser.is_active.is_(True),
+                    )
+                )
+                or 0
+            )
+            if active_superadmins <= 1:
+                raise HTTPException(status_code=400, detail="Cannot deactivate last active superadmin")
         item.is_active = payload.is_active
     if payload.password:
         item.password_hash = hash_password(payload.password)
@@ -105,6 +129,15 @@ async def delete_admin(
         raise HTTPException(status_code=404, detail="Admin not found")
     if item.username == admin.username:
         raise HTTPException(status_code=400, detail="Cannot delete current admin")
+    if item.role.value == "superadmin":
+        active_superadmins = (
+            await db.scalar(
+                select(func.count(AdminUser.id)).where(AdminUser.role == item.role, AdminUser.is_active.is_(True))
+            )
+            or 0
+        )
+        if active_superadmins <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete last active superadmin")
     await db.delete(item)
     db.add(ActivityLog(admin_id=admin.id, action="delete_admin", details=f"admin_id={admin_id}"))
     await db.commit()

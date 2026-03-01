@@ -10,8 +10,8 @@
 - [x] Типовые админ-ресурсы (users/content/logs/admins/settings) переведены на refine CRUD.
 
 ## Производительность
-- [ ] Endpoint health API отвечает в целевых пределах.
-- [ ] Smoke-тест массовой рассылки успешно пройден.
+- [ ] Endpoint health API отвечает в целевых пределах (p95 &lt; 500 ms под нагрузкой: `tests/load/k6-smoke.js`; в процессе: `tests/integration/test_health.py::test_health_response_time_sla`).
+- [ ] Smoke-тест массовой рассылки успешно пройден (`tests/integration/test_admin_flows.py::test_mailing_smoke_multiple_recipients`; требует запущенный API на localhost:8000).
 
 ## Безопасность
 - [x] Включен rate limiting для входа.
@@ -25,3 +25,8 @@
 - [x] Переданы руководства для администратора и пользователя бота.
 - [x] Переданы инструкции backup/restore и pre-prod проверки.
 - [x] Передана матрица соответствия ТЗ (`docs/TZ_TRACEABILITY.md`).
+
+## Верификация (ручная и по ролям)
+
+- **Ручной проход:** регистрация в боте, CRUD контента (акции/новинки/приходы), мастер рассылок (4 шага, test-send, отправка/отмена/retry), аналитика, настройки, бэкапы, раздел Admins.
+- **Роли и доступ:** сверить с матрицей из спецификации админ-панели (супер-админ / админ / менеджер). Реализация RBAC — `admin.api` (require_roles, get_current_admin), тесты — `tests/integration/test_admin_rbac.py`.

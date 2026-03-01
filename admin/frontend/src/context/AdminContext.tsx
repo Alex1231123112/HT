@@ -8,12 +8,13 @@ const AdminContext = createContext<AdminState | null>(null);
 
 export function AdminProvider({ children }: PropsWithChildren) {
   const state = useAdminData();
+  const { tokenReady, refresh, setError } = state;
 
   useEffect(() => {
-    if (state.tokenReady) {
-      void state.refresh().catch((error: unknown) => state.setError(String(error)));
+    if (tokenReady) {
+      void refresh().catch((error: unknown) => setError(String(error)));
     }
-  }, [state.tokenReady]);
+  }, [tokenReady, refresh, setError]);
 
   return <AdminContext.Provider value={state}>{children}</AdminContext.Provider>;
 }

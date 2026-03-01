@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useCreate, useCustomMutation, useList, useNotification, useUpdate } from "@refinedev/core";
+import { getApiUrl } from "../refine/providers";
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -28,7 +29,7 @@ const statusLabels: Record<Mailing["status"], string> = {
 
 export function MailingsPage() {
   const { result: usersResp } = useList<UserItem>({ resource: "users" });
-  const users = usersResp?.data ?? [];
+  const users = useMemo(() => usersResp?.data ?? [], [usersResp?.data]);
   const establishments = useMemo(() => Array.from(new Set(users.map((u) => u.establishment))), [users]);
   const { result: mailingsResp, query: mailingsQuery } = useList<Mailing>({ resource: "mailings" });
   const mailings = mailingsResp?.data ?? [];
@@ -86,7 +87,7 @@ export function MailingsPage() {
     }
     if (action === "stats") {
       const token = localStorage.getItem("token") ?? "";
-      const response = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8000/api"}/mailings/${id}/stats`, {
+      const response = await fetch(`${getApiUrl()}/mailings/${id}/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = (await response.json()) as { data: { sent: number; opened: number; clicked: number; open_rate: number; ctr: number } };

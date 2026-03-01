@@ -240,13 +240,15 @@ export function useAdminData() {
   const uploadContentMedia = async (kind: ContentKind, file: File | null) => {
     if (!file) return;
     const data = await apiUploadMedia(file);
-    setContentForms((prev) => ({ ...prev, [kind]: { ...prev[kind], image_url: `/uploads/${data.filename}` } }));
+    const mediaUrl = data.url ?? (data.filename ? `/uploads/${data.filename}` : "");
+    setContentForms((prev) => ({ ...prev, [kind]: { ...prev[kind], image_url: mediaUrl } }));
   };
 
   const uploadMailMedia = async (file: File | null) => {
     if (!file) return;
     const data = await apiUploadMedia(file);
-    setMailForm((prev) => ({ ...prev, media_url: `/uploads/${data.filename}` }));
+    const mediaUrl = data.url ?? (data.filename ? `/uploads/${data.filename}` : "");
+    setMailForm((prev) => ({ ...prev, media_url: mediaUrl }));
   };
 
   const createMailing = async () => {
