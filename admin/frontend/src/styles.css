@@ -164,3 +164,27 @@ textarea {
   color: #e5e7eb;
   border: 1px solid #374151;
 }
+
+/* Редактор контента (Quill): компактная панель как в Telegram / Word */
+.rich-editor-wrap .ql-toolbar.ql-snow {
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 1px solid #d9d9d9;
+  background: #fafafa;
+}
+.rich-editor-wrap .ql-container.ql-snow {
+  border: none;
+  font-size: 14px;
+}
+.rich-editor-wrap .ql-editor {
+  min-height: 120px;
+}
+.rich-editor-wrap .ql-toolbar .ql-formats {
+  margin-right: 12px;
+}
+.rich-editor-wrap .ql-toolbar button {
+  width: 28px;
+  padding: 2px 4px;
+}
+.rich-editor-wrap .ql-toolbar button[value="bold"] { font-weight: bold; }
+.rich-editor-wrap .ql-toolbar button[value="italic"] { font-style: italic; }

@@ -68,6 +68,39 @@ class UserOut(UserBase):
         from_attributes = True
 
 
+class ManagerBase(BaseModel):
+    full_name: str | None = None
+    phone_number: str | None = None
+    telegram_username: str | None = None
+    telegram_user_id: int | None = None
+    establishment: str = ""
+    user_type: UserType = UserType.HORECA
+    is_active: bool = True
+
+
+class ManagerCreate(ManagerBase):
+    pass
+
+
+class ManagerUpdate(BaseModel):
+    full_name: str | None = None
+    phone_number: str | None = None
+    telegram_username: str | None = None
+    telegram_user_id: int | None = None
+    establishment: str | None = None
+    user_type: UserType | None = None
+    is_active: bool | None = None
+
+
+class ManagerOut(ManagerBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ContentBase(BaseModel):
     title: str
     description: str = ""
@@ -302,6 +335,29 @@ class DistributionChannelOut(BaseModel):
 # --- Контент план ---
 
 
+class ContentPlanItemCreate(BaseModel):
+    """Одно сообщение в плане (тип + контент или кастомный текст)."""
+    content_type: ContentPlanContentType
+    content_id: int | None = None
+    custom_title: str | None = None
+    custom_description: str | None = None
+    custom_media_url: str | None = None
+
+
+class ContentPlanItemOut(BaseModel):
+    id: int
+    plan_id: int
+    sort_order: int
+    content_type: ContentPlanContentType
+    content_id: int | None = None
+    custom_title: str | None = None
+    custom_description: str | None = None
+    custom_media_url: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ContentPlanCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     content_type: ContentPlanContentType
@@ -311,6 +367,7 @@ class ContentPlanCreate(BaseModel):
     custom_media_url: str | None = None
     scheduled_at: datetime | None = None
     channel_ids: list[int] = Field(default_factory=list)
+    items: list[ContentPlanItemCreate] = Field(default_factory=list)  # несколько сообщений с разными типами
 
 
 class ContentPlanUpdate(BaseModel):
@@ -323,6 +380,7 @@ class ContentPlanUpdate(BaseModel):
     scheduled_at: datetime | None = None
     status: ContentPlanStatus | None = None
     channel_ids: list[int] | None = None
+    items: list[ContentPlanItemCreate] | None = None  # если передано — подменяет список сообщений плана
 
 
 class ContentPlanOut(BaseModel):
@@ -338,6 +396,7 @@ class ContentPlanOut(BaseModel):
     sent_at: datetime | None = None
     created_at: datetime
     channel_ids: list[int] = Field(default_factory=list)
+    items: list[ContentPlanItemOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-import { Create, DeleteButton, Edit, EditButton, List, SaveButton, useForm, useTable } from "@refinedev/antd";
+import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
 import { Button, DatePicker, Drawer, Form, Input, InputNumber, message, Select, Switch, Table } from "antd";
 import type { UploadProps } from "antd";
 import { InboxOutlined, TeamOutlined } from "@ant-design/icons";
@@ -213,7 +213,7 @@ export function EventsCreate() {
   });
 
   return (
-    <Create title="Новое мероприятие" saveButtonProps={saveButtonProps}>
+    <Create title="Новое мероприятие" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Название" name="title" rules={[{ required: true }]}>
           <Input />
@@ -257,7 +257,7 @@ export function EventsEdit() {
   const { formProps, saveButtonProps } = useForm<EventRecord>({ resource: "events", action: "edit" });
 
   return (
-    <Edit title="Редактирование мероприятия" saveButtonProps={saveButtonProps}>
+    <Edit title="Редактирование мероприятия" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Название" name="title" rules={[{ required: true }]}>
           <Input />

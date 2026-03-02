@@ -1,4 +1,4 @@
-import { Create, DeleteButton, Edit, EditButton, List, SaveButton, useForm, useTable } from "@refinedev/antd";
+import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
 import { Form, Input, Select, Switch, Table } from "antd";
 
 type ChannelRecord = {
@@ -14,6 +14,15 @@ const channelTypeOptions = [
   { label: "Бот", value: "bot" },
   { label: "Telegram-канал", value: "telegram_channel" },
 ];
+
+/** Из ссылки t.me/username или https://t.me/username извлекает @username. */
+function normalizeChannelRef(val: string | undefined): string {
+  const ref = (val ?? "").trim();
+  if (!ref) return ref;
+  const m = ref.match(/^(?:https?:\/\/)?(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]+)/i);
+  if (m) return (m[1].startsWith("@") ? m[1] : `@${m[1]}`);
+  return ref;
+}
 
 export function ChannelsList() {
   const { tableProps } = useTable<ChannelRecord>({ resource: "channels" });
@@ -61,7 +70,7 @@ export function ChannelsCreate() {
   });
 
   return (
-    <Create title="Добавить канал рассылки" saveButtonProps={saveButtonProps}>
+    <Create title="Добавить канал рассылки" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Название" name="name" rules={[{ required: true }]}>
           <Input placeholder="Например: Основной бот" />
@@ -72,9 +81,10 @@ export function ChannelsCreate() {
         <Form.Item
           label="Ссылка на канал (username или chat_id)"
           name="telegram_ref"
-          help="Для Telegram-канала укажите @username или числовой chat_id."
+          normalize={normalizeChannelRef}
+          help="Можно вставить ссылку (https://t.me/username) — подставится @username. Или @username, или chat_id приватного канала (-100...)."
         >
-          <Input placeholder="@channel или -1001234567890" />
+          <Input placeholder="https://t.me/канал или @username или -1001234567890" />
         </Form.Item>
         <Form.Item label="Активен" name="is_active" valuePropName="checked">
           <Switch />
@@ -88,7 +98,7 @@ export function ChannelsEdit() {
   const { formProps, saveButtonProps } = useForm<ChannelRecord>({ resource: "channels", action: "edit" });
 
   return (
-    <Edit title="Редактировать канал" saveButtonProps={saveButtonProps}>
+    <Edit title="Редактировать канал" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Название" name="name" rules={[{ required: true }]}>
           <Input />
@@ -96,8 +106,13 @@ export function ChannelsEdit() {
         <Form.Item label="Тип" name="channel_type" rules={[{ required: true }]}>
           <Select options={channelTypeOptions} />
         </Form.Item>
-        <Form.Item label="Ссылка на канал (username или chat_id)" name="telegram_ref">
-          <Input placeholder="@channel или -1001234567890" />
+        <Form.Item
+          label="Ссылка на канал (username или chat_id)"
+          name="telegram_ref"
+          normalize={normalizeChannelRef}
+          help="Можно вставить ссылку (https://t.me/username) — подставится @username. Или @username, или chat_id приватного канала (-100...)."
+        >
+          <Input placeholder="https://t.me/канал или @username или -1001234567890" />
         </Form.Item>
         <Form.Item label="Активен" name="is_active" valuePropName="checked">
           <Switch />

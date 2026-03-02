@@ -1,0 +1,78 @@
+"""
+Отправка сообщений в Telegram (Bot API).
+Используется для рассылки в бот (подписчикам) и в каналы.
+В тестах можно подставить mock-клиент и проверять вызовы.
+"""
+import logging
+from typing import Any
+
+import httpx
+
+TELEGRAM_API = "https://api.telegram.org"
+PARSE_MODE_HTML = "HTML"
+
+logger = logging.getLogger(__name__)
+
+
+async def send_text(
+    bot_token: str,
+    chat_id: str | int,
+    text: str,
+    parse_mode: str = PARSE_MODE_HTML,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Отправить текстовое сообщение в чат/канал. Возвращает (response_data, None) при успехе или (None, error_message)."""
+    url = f"{TELEGRAM_API}/bot{bot_token}/sendMessage"
+    payload: dict[str, Any] = {"chat_id": chat_id, "text": text[:4096], "parse_mode": parse_mode}
+    if client is None:
+        async with httpx.AsyncClient(timeout=30.0) as c:
+            return await _post(c, url, payload)
+    return await _post(client, url, payload)
+
+
+async def send_photo(
+    bot_token: str,
+    chat_id: str | int,
+    photo_url: str,
+    caption: str | None = None,
+    parse_mode: str = PARSE_MODE_HTML,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Отправить фото по URL в чат/канал. Возвращает (response_data, None) при успехе или (None, error_message)."""
+    url = f"{TELEGRAM_API}/bot{bot_token}/sendPhoto"
+    payload: dict[str, Any] = {"chat_id": chat_id, "photo": photo_url}
+    if caption:
+        payload["caption"] = caption[:1024]
+        payload["parse_mode"] = parse_mode
+    if client is None:
+        async with httpx.AsyncClient(timeout=30.0) as c:
+            return await _post(c, url, payload)
+    return await _post(client, url, payload)
+
+
+def _error_description(data: dict[str, Any]) -> str:
+    """Текст ошибки из ответа Telegram API для показа пользователю."""
+    desc = data.get("description") or data.get("error") or ""
+    code = data.get("error_code")
+    if code is not None and desc:
+        return f"{desc} (код {code})"
+    return desc or "неизвестная ошибка"
+
+
+async def _post(client: httpx.AsyncClient, url: str, json: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """
+    Возвращает (data, None) при успехе или (None, error_message) при ошибке.
+    """
+    try:
+        r = await client.post(url, json=json)
+        data = r.json() if r.content else {}
+        if not r.is_success:
+            msg = _error_description(data)
+            logger.warning("Telegram API error: %s %s", r.status_code, data)
+            return None, msg
+        return data, None
+    except Exception as e:
+        logger.exception("Telegram send failed: %s", e)
+        return None, str(e)

@@ -1,4 +1,5 @@
-import { Create, DeleteButton, Edit, EditButton, List, SaveButton, useForm, useTable } from "@refinedev/antd";
+import { useList } from "@refinedev/core";
+import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
 import { Table, Form, Input, Select, Switch, InputNumber, DatePicker } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 
@@ -67,9 +68,11 @@ export function UsersList() {
 
 export function UsersCreate() {
   const { formProps, saveButtonProps } = useForm<UserRecord>({ resource: "users", action: "create" });
+  const { result: establishmentsResult } = useList<{ id: number; name: string }>({ resource: "establishments" });
+  const establishmentOptions = (establishmentsResult?.data ?? []).map((e) => ({ label: e.name, value: e.name }));
 
   return (
-    <Create title="Создание пользователя" saveButtonProps={saveButtonProps}>
+    <Create title="Создание пользователя" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="ID" name="id" rules={[{ required: true }]}>
           <InputNumber style={{ width: "100%" }} />
@@ -107,23 +110,30 @@ export function UsersCreate() {
             ]}
           />
         </Form.Item>
-        <Form.Item label="Заведение" name="establishment" rules={[{ required: true }]}>
-          <Input />
+        <Form.Item label="Заведение" name="establishment" rules={[{ required: true, message: "Выберите заведение" }]}>
+          <Select
+            showSearch
+            optionFilterProp="label"
+            placeholder="Выберите заведение"
+            options={establishmentOptions}
+            allowClear
+          />
         </Form.Item>
         <Form.Item label="Активен" name="is_active" valuePropName="checked" initialValue>
           <Switch />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Create>
   );
 }
 
 export function UsersEdit() {
   const { formProps, saveButtonProps } = useForm<UserRecord>({ resource: "users", action: "edit" });
+  const { result: establishmentsResult } = useList<{ id: number; name: string }>({ resource: "establishments" });
+  const establishmentOptions = (establishmentsResult?.data ?? []).map((e) => ({ label: e.name, value: e.name }));
 
   return (
-    <Edit title="Редактирование пользователя" saveButtonProps={saveButtonProps}>
+    <Edit title="Редактирование пользователя" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Логин" name="username">
           <Input />
@@ -160,13 +170,18 @@ export function UsersEdit() {
           />
         </Form.Item>
         <Form.Item label="Заведение" name="establishment">
-          <Input />
+          <Select
+            showSearch
+            optionFilterProp="label"
+            placeholder="Выберите заведение"
+            options={establishmentOptions}
+            allowClear
+          />
         </Form.Item>
         <Form.Item label="Активен" name="is_active" valuePropName="checked">
           <Switch />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Edit>
   );
 }

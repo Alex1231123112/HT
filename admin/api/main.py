@@ -16,20 +16,23 @@ from admin.api.routers.content import router as content_router
 from admin.api.routers.dashboard import router as dashboard_router
 from admin.api.routers.events import router as events_router
 from admin.api.routers.logs import router as logs_router
+from admin.api.content_plan_sender import process_due_content_plans
 from admin.api.routers.mailings import process_due_mailings
 from admin.api.routers.mailings import router as mailings_router
 from admin.api.routers.settings import router as settings_router
 from admin.api.routers.uploads import router as uploads_router
 from admin.api.routers.users import router as users_router
 from admin.api.routers.establishments import router as establishments_router
+from admin.api.routers.managers import router as managers_router
 from admin.api.routers.channels import router as channels_router
 from admin.api.routers.content_plan import router as content_plan_router
 from admin.api.schemas import GenericMessage
+from admin.api.security import clear_revoked_tokens
 from config.logging import configure_logging
 from config.settings import get_settings
 from database.models import User
 from database.seed import ensure_default_admin
-from database.session import SessionLocal
+from database.session import SessionLocal, engine
 
 settings = get_settings()
 configure_logging()
@@ -71,6 +74,7 @@ def _redact_db_url(url: str) -> str:
 async def startup() -> None:
     import logging
     from sqlalchemy import func, select
+    clear_revoked_tokens()
     log = logging.getLogger("uvicorn.error")
     log.info("API DB: %s", _redact_db_url(settings.database_url))
     async with SessionLocal() as session:
@@ -87,12 +91,14 @@ async def shutdown() -> None:
         _scheduler_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await _scheduler_task
+    await engine.dispose()
 
 
 async def _scheduled_mailing_worker() -> None:
     while True:
         async with SessionLocal() as db:
             await process_due_mailings(db)
+            await process_due_content_plans(db, settings.bot_token)
         await asyncio.sleep(10)
 
 
@@ -110,6 +116,7 @@ app.include_router(admins_router)
 app.include_router(dashboard_router)
 app.include_router(users_router)
 app.include_router(establishments_router)
+app.include_router(managers_router)
 app.include_router(channels_router)
 app.include_router(content_plan_router)
 app.include_router(content_router)

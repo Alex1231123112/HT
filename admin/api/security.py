@@ -51,3 +51,8 @@ def revoke_token(token: str) -> None:
 
 def is_token_revoked(token: str) -> bool:
     return token in _revoked_tokens
+
+
+def clear_revoked_tokens() -> None:
+    """Clear in-memory revoked tokens (e.g. on startup so each lifespan starts clean)."""
+    _revoked_tokens.clear()

@@ -1,4 +1,4 @@
-import { Create, DeleteButton, Edit, EditButton, List, SaveButton, useForm, useTable } from "@refinedev/antd";
+import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
 import { Form, Input, Select, Table, Tag } from "antd";
 
 type EstablishmentRecord = {
@@ -63,7 +63,7 @@ export function EstablishmentsCreate() {
   });
 
   return (
-    <Create title="Новое заведение" saveButtonProps={saveButtonProps}>
+    <Create title="Новое заведение" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Название" name="name" rules={[{ required: true }]}>
           <Input placeholder="Название заведения" />
@@ -72,7 +72,6 @@ export function EstablishmentsCreate() {
           <Select options={typeOptions} />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Create>
   );
 }
@@ -84,7 +83,7 @@ export function EstablishmentsEdit() {
   });
 
   return (
-    <Edit title="Редактирование заведения" saveButtonProps={saveButtonProps}>
+    <Edit title="Редактирование заведения" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Название" name="name" rules={[{ required: true }]}>
           <Input />
@@ -93,7 +92,6 @@ export function EstablishmentsEdit() {
           <Select options={typeOptions} />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Edit>
   );
 }

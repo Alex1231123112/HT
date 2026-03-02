@@ -160,6 +160,23 @@ class Establishment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Manager(Base):
+    """Менеджеры — отдельная таблица контактов (ФИО, телефон, Telegram, заведения). Не путать с users (подписчики бота)."""
+
+    __tablename__ = "managers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    establishment: Mapped[str] = mapped_column(String(500))  # comma-separated names
+    user_type: Mapped[UserType] = mapped_column(Enum(UserType, name="managers_user_type", values_callable=enum_values))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, onupdate=datetime.utcnow)
+
+
 class Delivery(Base):
     __tablename__ = "deliveries"
 
@@ -292,3 +309,20 @@ class ContentPlanChannel(Base):
     channel_id: Mapped[int] = mapped_column(
         ForeignKey("distribution_channels.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+class ContentPlanItem(Base):
+    """Одно сообщение в контент-плане (в плане может быть несколько с разными типами)."""
+
+    __tablename__ = "content_plan_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("content_plan.id", ondelete="CASCADE"))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)  # порядок отправки
+    content_type: Mapped[ContentPlanContentType] = mapped_column(
+        Enum(ContentPlanContentType, name="content_plan_content_type", values_callable=enum_values)
+    )
+    content_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custom_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    custom_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    custom_media_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

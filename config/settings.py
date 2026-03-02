@@ -60,7 +60,7 @@ class Settings(BaseSettings):
         return bool(self.s3_bucket and self.s3_access_key_id and self.s3_secret_access_key)
     backup_dir: str = Field(default="./backups", alias="BACKUP_DIR")
     timezone: str = Field(default="Europe/Moscow", alias="TIMEZONE")
-    allowed_origins: str = Field(default="http://localhost:5173", alias="ALLOWED_ORIGINS")
+    allowed_origins: str = Field(default="http://localhost:5173,http://127.0.0.1:5173", alias="ALLOWED_ORIGINS")
 
     @property
     def cors_origins(self) -> List[str]:

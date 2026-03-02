@@ -1,4 +1,4 @@
-import { Create, DeleteButton, Edit, EditButton, List, SaveButton, useForm, useTable } from "@refinedev/antd";
+import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
 import { Form, Input, Select, Switch, Table } from "antd";
 
 type AdminRecord = {
@@ -49,7 +49,7 @@ export function AdminsCreate() {
   const { formProps, saveButtonProps } = useForm<AdminRecord>({ resource: "admins", action: "create" });
 
   return (
-    <Create title="Создание администратора" saveButtonProps={saveButtonProps}>
+    <Create title="Создание администратора" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Логин" name="username" rules={[{ required: true, message: "Введите логин" }]}>
           <Input placeholder="Например, admin" />
@@ -64,7 +64,6 @@ export function AdminsCreate() {
           <Select options={roleOptions} />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Create>
   );
 }
@@ -73,7 +72,7 @@ export function AdminsEdit() {
   const { formProps, saveButtonProps } = useForm<AdminRecord>({ resource: "admins", action: "edit" });
 
   return (
-    <Edit title="Редактирование администратора" saveButtonProps={saveButtonProps}>
+    <Edit title="Редактирование администратора" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <Form {...formProps} layout="vertical">
         <Form.Item label="Почта" name="email" rules={[{ type: "email", message: "Некорректный email" }]}>
           <Input placeholder="admin@example.com" />
@@ -96,7 +95,6 @@ export function AdminsEdit() {
           <Input.Password />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Edit>
   );
 }

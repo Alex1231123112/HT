@@ -1,4 +1,4 @@
-import { Edit, SaveButton, useForm, useTable } from "@refinedev/antd";
+import { Edit, useForm, useTable } from "@refinedev/antd";
 import { Form, Input, Table } from "antd";
 import { useMemo } from "react";
 
@@ -25,7 +25,7 @@ export function SettingsEdit() {
   });
 
   return (
-    <Edit title="Системные настройки" saveButtonProps={saveButtonProps}>
+    <Edit title="Системные настройки" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
       <SettingsList />
       <Form {...formProps} layout="vertical" style={{ marginTop: 16 }}>
         <Form.Item label="Ключ" name="key">
@@ -35,7 +35,6 @@ export function SettingsEdit() {
           <Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} />
         </Form.Item>
       </Form>
-      <SaveButton {...saveButtonProps}>Сохранить</SaveButton>
     </Edit>
   );
 }

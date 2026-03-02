@@ -12,6 +12,8 @@ declare global {
 
 export function getApiUrl(): string {
   if (typeof window !== "undefined" && window.__API_URL__) return window.__API_URL__;
+  // В режиме dev (npm run dev) используем относительный /api — Vite проксирует на backend
+  if (import.meta.env.DEV) return "/api";
   return import.meta.env.VITE_API_URL ?? DEFAULT_API_URL;
 }
 
@@ -48,14 +50,37 @@ const request = async <T = unknown>(path: string, init?: RequestInit, csrf = fal
     ...(init?.headers ?? {}),
   };
 
-  const response = await fetch(`${getApiUrl()}${path}`, { ...init, headers });
+  const url = `${getApiUrl()}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, { ...init, headers });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw {
+      message: `Не удалось подключиться к API: ${msg}. URL: ${url}. Проверьте, что сервер запущен и доступен.`,
+      statusCode: undefined,
+    } as HttpError;
+  }
+
   const contentType = response.headers.get("content-type") ?? "";
   const isJson = contentType.includes("application/json");
 
   if (!response.ok) {
-    const detail = isJson ? JSON.stringify(await response.json()) : await response.text();
+    let message: string;
+    if (isJson) {
+      const body = (await response.json()) as { detail?: string | Array<{ msg?: string; loc?: unknown }> };
+      if (typeof body.detail === "string") {
+        message = body.detail;
+      } else if (Array.isArray(body.detail) && body.detail.length > 0) {
+        message = body.detail.map((d) => d.msg ?? JSON.stringify(d)).join("; ");
+      } else {
+        message = JSON.stringify(body);
+      }
+    } else {
+      message = await response.text() || `HTTP ${response.status}`;
+    }
     throw {
-      message: detail || `HTTP ${response.status}`,
+      message: message || `Ошибка ${response.status}`,
       statusCode: response.status,
     } as HttpError;
   }
@@ -94,6 +119,10 @@ export const dataProvider: DataProvider = {
       const list = Object.entries(data).map(([key, value]) => ({ id: key, key, value }));
       return { data: list, total: list.length };
     }
+    if (resource === "establishments" || resource === "channels") {
+      const list = Array.isArray(payload) ? payload : (payload && typeof payload === "object" && "data" in (payload as object) ? (payload as { data: unknown[] }).data : []) ?? [];
+      return { data: list as Record<string, unknown>[], total: Array.isArray(list) ? list.length : 0 };
+    }
     // API может вернуть массив напрямую или обёртку { data, total }
     if (Array.isArray(payload)) {
       return { data: payload as Record<string, unknown>[], total: payload.length };
@@ -119,11 +148,37 @@ export const dataProvider: DataProvider = {
       await request("/settings", { method: "PUT", body: JSON.stringify({ items }) }, true);
       return { data: { ...(variables as Record<string, unknown>) } };
     }
+    let body: unknown = variables ?? {};
+    if (resource === "content_plan" && body && typeof body === "object") {
+      const v = body as Record<string, unknown>;
+      const channelIds = Array.isArray(v.channel_ids)
+        ? (v.channel_ids as unknown[]).map((id) => (typeof id === "string" ? parseInt(id, 10) : Number(id)))
+        : [];
+      const normItem = (it: Record<string, unknown>) => ({
+        content_type: it.content_type,
+        content_id: it.content_id != null && it.content_id !== "" ? Number(it.content_id) : null,
+        custom_title: it.custom_title ?? null,
+        custom_description: it.custom_description ?? null,
+        custom_media_url: it.custom_media_url ?? null,
+      });
+      const items = Array.isArray(v.items) ? (v.items as Record<string, unknown>[]).map(normItem) : [];
+      body = {
+        title: v.title,
+        content_type: v.content_type,
+        content_id: v.content_id != null && v.content_id !== "" ? Number(v.content_id) : null,
+        custom_title: v.custom_title ?? null,
+        custom_description: v.custom_description ?? null,
+        custom_media_url: v.custom_media_url ?? null,
+        scheduled_at: v.scheduled_at ?? null,
+        channel_ids: channelIds,
+        items,
+      };
+    }
     const payload = await request<unknown>(
       toResourcePath(resource),
       {
         method: "POST",
-        body: JSON.stringify(variables ?? {}),
+        body: JSON.stringify(body),
       },
       true,
     );
@@ -135,11 +190,24 @@ export const dataProvider: DataProvider = {
       await request("/settings", { method: "PUT", body: JSON.stringify({ items: [{ key: item.key, value: item.value }] }) }, true);
       return { data: { id: item.key, ...item } };
     }
+    let body: unknown = variables ?? {};
+    if (resource === "content_plan" && body && typeof body === "object") {
+      const v = body as Record<string, unknown>;
+      const normItem = (it: Record<string, unknown>) => ({
+        content_type: it.content_type,
+        content_id: it.content_id != null && it.content_id !== "" ? Number(it.content_id) : null,
+        custom_title: it.custom_title ?? null,
+        custom_description: it.custom_description ?? null,
+        custom_media_url: it.custom_media_url ?? null,
+      });
+      const items = Array.isArray(v.items) ? (v.items as Record<string, unknown>[]).map(normItem) : undefined;
+      body = { ...v, items };
+    }
     const payload = await request<unknown>(
       `${toResourcePath(resource)}/${id}`,
       {
         method: "PUT",
-        body: JSON.stringify(variables ?? {}),
+        body: JSON.stringify(body),
       },
       true,
     );
