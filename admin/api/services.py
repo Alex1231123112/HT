@@ -33,8 +33,10 @@ async def get_content_by_id(model, item_id: int, db: AsyncSession):
 
 
 def _normalize_content_payload(payload: dict) -> dict:
-    """Приводит payload к типам, ожидаемым ORM (user_type — enum, published_at — datetime | None)."""
+    """Приводит payload к типам, ожидаемым ORM (user_type — enum, published_at — datetime | None). Санитизирует description под Telegram."""
     from datetime import datetime as dt
+
+    from admin.api.html_sanitizer import sanitize_html_for_telegram
 
     out = dict(payload)
     if "user_type" in out and isinstance(out["user_type"], str):
@@ -44,6 +46,8 @@ def _normalize_content_payload(payload: dict) -> dict:
             out["published_at"] = dt.fromisoformat(out["published_at"].replace("Z", "+00:00"))
         except (ValueError, TypeError):
             out["published_at"] = None
+    if "description" in out and isinstance(out["description"], str):
+        out["description"] = sanitize_html_for_telegram(out["description"])
     return out
 
 

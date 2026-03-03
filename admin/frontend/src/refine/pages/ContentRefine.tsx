@@ -1,7 +1,7 @@
-import { useRef, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
 import { Button, Form, Input, message, Modal, Select, Space, Switch, Table } from "antd";
+import type { FormInstance } from "antd";
 import type { UploadProps } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import Dragger from "antd/es/upload/Dragger";
@@ -9,7 +9,6 @@ import { uploadContentFile } from "../providers";
 import {
   getStoredTemplates,
   MESSAGE_TEMPLATES,
-  PublicationPreview,
   RichTextEditor,
   setStoredTemplates,
 } from "../components/PublicationEditor";
@@ -127,7 +126,7 @@ function ContentFormFields() {
       <Form.Item
         label="Описание"
         name="description"
-        help="Выделите текст и выберите форматирование в панели сверху (жирный, курсив, подчёркивание, зачёркивание, цитата, моноширинный, ссылка). Предпросмотр — после сохранения."
+        help="Выделите текст и выберите форматирование в панели сверху (как в Telegram)."
       >
         <RichTextEditor />
       </Form.Item>
@@ -217,148 +216,191 @@ export function ContentList({ resource }: { resource: "promotions" | "news" | "d
   );
 }
 
-export function ContentCreate({ resource }: { resource: "promotions" | "news" | "deliveries" }) {
-  const navigate = useNavigate();
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [previewRecord, setPreviewRecord] = useState<ContentRecord | null>(null);
-  const submittedValuesRef = useRef<Partial<ContentRecord> | null>(null);
+const PREVIEW_DEBOUNCE_MS = 400;
+const PREVIEW_MESSAGE_TYPE = "UPDATE_PREVIEW";
+const PREVIEW_WIDTH_MIN = 280;
+const PREVIEW_WIDTH_MAX = 560;
+const PREVIEW_WIDTH_DEFAULT = 380;
 
-  const { formProps, saveButtonProps } = useForm<ContentRecord>({
-    resource,
-    action: "create",
-    defaultValues: { is_active: true, user_type: "all" },
-    redirect: false,
-    onMutationSuccess: (data) => {
-      const record = (data as ContentRecord & { data?: ContentRecord })?.data ?? (data as ContentRecord);
-      const fromForm = submittedValuesRef.current;
-      setPreviewRecord({
-        ...record,
-        title: record?.title ?? fromForm?.title ?? "",
-        description: record?.description ?? fromForm?.description ?? "",
-        image_url: record?.image_url ?? fromForm?.image_url,
-      } as ContentRecord);
-      setPreviewModalOpen(true);
-    },
-  });
+const FORM_COLUMN_STYLE: React.CSSProperties = {
+  flex: 1,
+  minWidth: 400,
+  maxWidth: 520,
+  padding: "16px 12px",
+  background: "#fafafa",
+  borderRadius: 12,
+  border: "1px solid #e8e8e8",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+};
 
-  const formPropsWithCapture = useMemo(
-    () => ({
-      ...formProps,
-      onFinish: (values: Partial<ContentRecord>) => {
-        submittedValuesRef.current = values;
-        return formProps.onFinish?.(values);
-      },
-    }),
-    [formProps]
-  );
+function sendPreviewToIframe(
+  iframeRef: React.RefObject<HTMLIFrameElement | null>,
+  payload: { title?: string; description?: string; image_url?: string | null }
+) {
+  try {
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: PREVIEW_MESSAGE_TYPE, payload },
+      window.location.origin
+    );
+  } catch {
+    // ignore
+  }
+}
 
-  const closePreviewAndGoToList = () => {
-    setPreviewModalOpen(false);
-    setPreviewRecord(null);
-    navigate(`/${resource}`);
+function ResizablePreviewPanel({ form }: { form: FormInstance }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(PREVIEW_WIDTH_DEFAULT);
+  const [resizing, setResizing] = useState(false);
+  const resizeStartRef = useRef({ x: 0, w: 0 });
+
+  const title = Form.useWatch("title", form) ?? "";
+  const description = Form.useWatch("description", form) ?? "";
+  const image_url = Form.useWatch("image_url", form) ?? null;
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      sendPreviewToIframe(iframeRef, {
+        title: String(title ?? ""),
+        description: String(description ?? ""),
+        image_url: image_url != null && image_url !== "" ? String(image_url) : null,
+      });
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [title, description, image_url]);
+
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartRef.current.x;
+      const w = Math.min(
+        PREVIEW_WIDTH_MAX,
+        Math.max(PREVIEW_WIDTH_MIN, resizeStartRef.current.w + delta)
+      );
+      setPreviewWidth(w);
+    };
+    const onUp = () => setResizing(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [resizing]);
+
+  const onResizerMouseDown = (e: React.MouseEvent) => {
+    resizeStartRef.current = { x: e.clientX, w: previewWidth };
+    setResizing(true);
+  };
+
+  const onIframeLoad = () => {
+    sendPreviewToIframe(iframeRef, {
+      title: String(form.getFieldValue("title") ?? ""),
+      description: String(form.getFieldValue("description") ?? ""),
+      image_url: form.getFieldValue("image_url") ?? null,
+    });
   };
 
   return (
-    <Create title="Создание контента" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
-      <Form {...formPropsWithCapture} layout="vertical">
-        <ContentFormFields />
-      </Form>
-      <Modal
-        title="Предпросмотр после сохранения"
-        open={previewModalOpen}
-        onCancel={closePreviewAndGoToList}
-        footer={
-          <Button type="primary" onClick={closePreviewAndGoToList}>
-            К списку
-          </Button>
-        }
-        width={420}
+    <div
+      style={{
+        display: "flex",
+        alignItems: "stretch",
+        width: "100%",
+        gap: 0,
+        minHeight: 460,
+      }}
+    >
+      <div
+        style={{
+          width: previewWidth,
+          minWidth: PREVIEW_WIDTH_MIN,
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
       >
-        {previewRecord && (
-          <PublicationPreview
-            title={previewRecord.title}
-            description={previewRecord.description}
-            mediaUrl={previewRecord.image_url}
-          />
-        )}
-      </Modal>
+        <div style={{ marginBottom: 8, fontSize: 13, color: "#666" }}>Превью в Telegram</div>
+        <iframe
+          ref={iframeRef}
+          src="/telegram-preview"
+          title="Превью в стиле Telegram"
+          onLoad={onIframeLoad}
+          style={{
+            width: "100%",
+            height: 420,
+            minHeight: 420,
+            border: "1px solid #e8e8e8",
+            borderRadius: 12,
+            display: "block",
+            flex: 1,
+          }}
+        />
+      </div>
+      <div
+        role="separator"
+        onMouseDown={onResizerMouseDown}
+        style={{
+          width: 8,
+          flexShrink: 0,
+          cursor: "col-resize",
+          background: resizing ? "#1890ff" : "#e8e8e8",
+          borderRadius: 2,
+          marginLeft: 4,
+          marginRight: 4,
+          alignSelf: "stretch",
+        }}
+        aria-label="Изменить ширину превью"
+      />
+    </div>
+  );
+}
+
+const LAYOUT_WRAPPER_STYLE: React.CSSProperties = {
+  display: "flex",
+  width: "100%",
+  alignItems: "flex-start",
+  gap: 0,
+};
+
+export function ContentCreate({ resource }: { resource: "promotions" | "news" | "deliveries" }) {
+  const { formProps, saveButtonProps, form } = useForm<ContentRecord>({
+    resource,
+    action: "create",
+    defaultFormValues: { is_active: true, user_type: "all" },
+    redirect: "list",
+  });
+
+  return (
+    <Create title="Создание контента" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
+      <div style={LAYOUT_WRAPPER_STYLE}>
+        <ResizablePreviewPanel form={form} />
+        <div style={FORM_COLUMN_STYLE}>
+          <Form {...formProps} layout="vertical">
+            <ContentFormFields />
+          </Form>
+        </div>
+      </div>
     </Create>
   );
 }
 
 export function ContentEdit({ resource }: { resource: "promotions" | "news" | "deliveries" }) {
-  const navigate = useNavigate();
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [previewRecord, setPreviewRecord] = useState<ContentRecord | null>(null);
-  const submittedValuesRef = useRef<Partial<ContentRecord> | null>(null);
-
-  const { formProps, saveButtonProps } = useForm<ContentRecord>({
+  const { formProps, saveButtonProps, form } = useForm<ContentRecord>({
     resource,
     action: "edit",
     redirect: false,
-    onMutationSuccess: (data) => {
-      const record = (data as ContentRecord & { data?: ContentRecord })?.data ?? (data as ContentRecord);
-      const fromForm = submittedValuesRef.current;
-      setPreviewRecord({
-        ...record,
-        id: (record as ContentRecord)?.id ?? (fromForm as ContentRecord)?.id,
-        title: record?.title ?? fromForm?.title ?? "",
-        description: record?.description ?? fromForm?.description ?? "",
-        image_url: record?.image_url ?? fromForm?.image_url,
-      } as ContentRecord);
-      setPreviewModalOpen(true);
-    },
   });
-
-  const formPropsWithCapture = useMemo(
-    () => ({
-      ...formProps,
-      onFinish: (values: Partial<ContentRecord>) => {
-        submittedValuesRef.current = values;
-        return formProps.onFinish?.(values);
-      },
-    }),
-    [formProps]
-  );
-
-  const closePreview = () => {
-    setPreviewModalOpen(false);
-    setPreviewRecord(null);
-  };
-
-  const goToList = () => {
-    setPreviewModalOpen(false);
-    setPreviewRecord(null);
-    navigate(`/${resource}`);
-  };
 
   return (
     <Edit title="Редактирование контента" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
-      <Form {...formPropsWithCapture} layout="vertical">
-        <ContentFormFields />
-      </Form>
-      <Modal
-        title="Предпросмотр после сохранения"
-        open={previewModalOpen}
-        onCancel={closePreview}
-        footer={
-          <Space>
-            <Button onClick={closePreview}>Остаться в форме</Button>
-            <Button type="primary" onClick={goToList}>
-              К списку
-            </Button>
-          </Space>
-        }
-        width={420}
-      >
-        {previewRecord && (
-          <PublicationPreview
-            title={previewRecord.title}
-            description={previewRecord.description}
-            mediaUrl={previewRecord.image_url}
-          />
-        )}
-      </Modal>
+      <div style={LAYOUT_WRAPPER_STYLE}>
+        <ResizablePreviewPanel form={form} />
+        <div style={FORM_COLUMN_STYLE}>
+          <Form {...formProps} layout="vertical">
+            <ContentFormFields />
+          </Form>
+        </div>
+      </div>
     </Edit>
   );
 }

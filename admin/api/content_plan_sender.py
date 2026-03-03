@@ -35,10 +35,13 @@ def _escape(s: str | None) -> str:
 
 
 def _normalize_html_for_telegram(html: str | None) -> str:
-    """Приводит HTML из редактора (например <p>) к виду, который Telegram отображает с переносами."""
+    """Санитизирует HTML по белому списку Telegram и приводит <p> к переносам для отображения."""
+    from admin.api.html_sanitizer import sanitize_html_for_telegram
+
     if not html or not html.strip():
         return ""
-    return html.replace("</p>", "<br>").replace("<p>", "").strip()
+    cleaned = sanitize_html_for_telegram(html)
+    return cleaned.replace("</p>", "<br>").replace("<p>", "").strip()
 
 
 def _content_type_value(ct: Any) -> str:

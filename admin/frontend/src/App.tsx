@@ -61,6 +61,9 @@ const ContentPlanEdit = React.lazy(() =>
 const EventsList = React.lazy(() => import("./refine/pages/EventsRefine").then((m) => ({ default: m.EventsList })));
 const EventsCreate = React.lazy(() => import("./refine/pages/EventsRefine").then((m) => ({ default: m.EventsCreate })));
 const EventsEdit = React.lazy(() => import("./refine/pages/EventsRefine").then((m) => ({ default: m.EventsEdit })));
+const TelegramPreviewFrame = React.lazy(() =>
+  import("./refine/pages/TelegramPreviewFrame").then((m) => ({ default: m.TelegramPreviewFrame }))
+);
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -131,6 +134,7 @@ export default function App() {
         >
           <Suspense fallback={PageFallback}>
           <Routes>
+            <Route path="/telegram-preview" element={<TelegramPreviewFrame />} />
             <Route
               element={
                 <Authenticated key="private" fallback={<CatchAllNavigate to="/login" />}>

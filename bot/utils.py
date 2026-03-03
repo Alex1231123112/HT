@@ -1,5 +1,6 @@
 import html
 import logging
+import re
 from urllib.parse import urlparse
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -47,10 +48,21 @@ def _is_video_url(url: str) -> bool:
     return any(lower.endswith(ext) for ext in (".mp4", ".webm", ".mov"))
 
 
+def _description_for_telegram(html_desc: str | None) -> str:
+    """Описание уже в HTML; нормализуем для Telegram (переносы, без лишних атрибутов)."""
+    if not html_desc or not html_desc.strip():
+        return ""
+    s = html_desc.strip()
+    s = s.replace("</p>", "<br>").replace("<p>", "")
+    s = re.sub(r'\s+rel="[^"]*"', "", s)
+    s = re.sub(r'\s+target="[^"]*"', "", s)
+    return s.strip()
+
+
 async def _send_content_item(message: Message, item, parse_mode: str = "HTML") -> None:
     safe_title = html.escape(str(item.title))
-    safe_desc = html.escape(str(item.description or ""))
-    text = f"<b>{safe_title}</b>\n\n{safe_desc}"
+    desc_html = _description_for_telegram(getattr(item, "description", None) or "")
+    text = f"<b>{safe_title}</b>\n\n{desc_html}" if desc_html else f"<b>{safe_title}</b>"
     if len(text) > 4096:
         text = text[:4090] + "..."
     media_url = _media_url(item.image_url)

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api.content_plan_sender import send_plan_to_telegram
 from admin.api.deps import get_current_admin, require_roles, verify_csrf
+from admin.api.html_sanitizer import sanitize_html_for_telegram
 from admin.api.schemas import (
     ContentPlanCreate,
     ContentPlanItemOut,
@@ -114,6 +115,9 @@ async def create_plan(
         for cid in channel_ids:
             db.add(ContentPlanChannel(plan_id=plan.id, channel_id=cid))
         for i, it in enumerate(items_data):
+            desc = it.custom_description
+            if isinstance(desc, str):
+                desc = sanitize_html_for_telegram(desc)
             db.add(
                 ContentPlanItem(
                     plan_id=plan.id,
@@ -121,7 +125,7 @@ async def create_plan(
                     content_type=it.content_type,
                     content_id=it.content_id,
                     custom_title=it.custom_title,
-                    custom_description=it.custom_description,
+                    custom_description=desc,
                     custom_media_url=it.custom_media_url,
                 )
             )
@@ -162,6 +166,9 @@ async def update_plan(
     if payload.items is not None:
         await db.execute(delete(ContentPlanItem).where(ContentPlanItem.plan_id == plan_id))
         for i, it in enumerate(payload.items):
+            desc = it.custom_description
+            if isinstance(desc, str):
+                desc = sanitize_html_for_telegram(desc)
             db.add(
                 ContentPlanItem(
                     plan_id=plan_id,
@@ -169,7 +176,7 @@ async def update_plan(
                     content_type=it.content_type,
                     content_id=it.content_id,
                     custom_title=it.custom_title,
-                    custom_description=it.custom_description,
+                    custom_description=desc,
                     custom_media_url=it.custom_media_url,
                 )
             )

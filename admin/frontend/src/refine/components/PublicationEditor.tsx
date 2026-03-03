@@ -50,14 +50,26 @@ export function setStoredTemplates(list: TemplateItem[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
 }
 
-const ALLOWED_TAGS = new Set(["B", "I", "U", "S", "CODE", "PRE", "A", "BR", "P", "STRONG", "EM", "BLOCKQUOTE"]);
+/** Теги, разрешённые для стиля Telegram: b/strong, i/em, u, s/del/strike, code, pre, a, br, p. */
+const ALLOWED_TAGS = new Set([
+  "B", "STRONG", "I", "EM", "U", "S", "DEL", "STRIKE",
+  "CODE", "PRE", "A", "BR", "P", "BLOCKQUOTE",
+]);
 
-/** Разрешаем только теги, которые поддерживает Telegram. Итеративный обход — без переполнения стека на глубоком HTML. */
+const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
+
+/** Санитизация HTML по белому списку как в Telegram: только разрешённые теги, у ссылок — только href и безопасные схемы (http, https, mailto). */
 function sanitizeHtml(html: string): string {
   if (!html || !html.trim()) return "";
   try {
     const div = document.createElement("div");
     div.innerHTML = html;
+    ["span", "div"].forEach((tag) => {
+      div.querySelectorAll(tag).forEach((el) => {
+        while (el.firstChild) el.parentNode?.insertBefore(el.firstChild, el);
+        el.remove();
+      });
+    });
     const stack: Node[] = [div];
     while (stack.length > 0) {
       const node = stack.pop()!;
@@ -70,6 +82,15 @@ function sanitizeHtml(html: string): string {
       }
       if (tag === "EM") {
         el.outerHTML = "<i>" + el.innerHTML + "</i>";
+        continue;
+      }
+      if (tag === "A") {
+        const href = el.getAttribute("href");
+        while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+        if (href && ALLOWED_LINK_SCHEMES.test(href.trim())) {
+          el.setAttribute("href", href.trim());
+        }
+        for (let i = el.childNodes.length - 1; i >= 0; i--) stack.push(el.childNodes[i]);
         continue;
       }
       if (!ALLOWED_TAGS.has(tag)) {
@@ -107,6 +128,40 @@ export function PublicationPreview({
     return () => clearTimeout(t);
   }, [description]);
   const safeDesc = useMemo(() => sanitizeHtml(debouncedDescription), [debouncedDescription]);
+  const fallbackSafe = useMemo(
+    () => ((description ?? "").trim() ? sanitizeHtml(description ?? "") : ""),
+    [description]
+  );
+  const htmlToShow = safeDesc || fallbackSafe;
+  const hasDescription = (description ?? "").trim().length > 0;
+  const permissiveHtml = useMemo(() => {
+    if (htmlToShow || !hasDescription) return null;
+    const raw = (description ?? "").trim();
+    return raw
+      .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+      .replace(/\s+on\w+="[^"]*"/gi, "")
+      .replace(/\s+rel="[^"]*"/gi, "")
+      .replace(/\s+target="[^"]*"/gi, "");
+  }, [description, hasDescription, htmlToShow]);
+  const plainTextFallback = useMemo(() => {
+    if (!hasDescription || htmlToShow || permissiveHtml) return null;
+    try {
+      const raw = (description ?? "").trim();
+      const withNewlines = raw
+        .replace(/<\/p>\s*<p>/gi, "\n")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n")
+        .replace(/<p[^>]*>/gi, "");
+      const div = document.createElement("div");
+      div.innerHTML = withNewlines;
+      return (div.textContent ?? div.innerText ?? "").replace(/\n+/g, "\n").trim();
+    } catch {
+      return (description ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    }
+  }, [description, hasDescription, htmlToShow, permissiveHtml]);
+  const showPermissive = permissiveHtml && permissiveHtml.length > 0;
+  const showPlain = plainTextFallback && plainTextFallback.length > 0;
   return (
     <div
       style={{
@@ -124,11 +179,18 @@ export function PublicationPreview({
           [Медиа: {mediaUrl.length > 40 ? mediaUrl.slice(0, 40) + "…" : mediaUrl}]
         </div>
       )}
-      {safeDesc ? (
+      {htmlToShow ? (
         <div
           style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
-          dangerouslySetInnerHTML={{ __html: safeDesc }}
+          dangerouslySetInnerHTML={{ __html: htmlToShow }}
         />
+      ) : showPermissive ? (
+        <div
+          style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+          dangerouslySetInnerHTML={{ __html: permissiveHtml }}
+        />
+      ) : showPlain ? (
+        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{plainTextFallback}</div>
       ) : (
         <span style={{ color: "#999" }}>(нет описания)</span>
       )}
