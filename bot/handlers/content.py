@@ -26,7 +26,14 @@ async def help_command(message: Message) -> None:
 
 @router.message(Command("menu"))
 async def menu_command(message: Message) -> None:
-    await message.answer("<b>Главное меню:</b>", reply_markup=menu_keyboard(), parse_mode="HTML")
+    establishment = None
+    if message.from_user:
+        async with SessionLocal() as session:
+            user = await session.get(User, message.from_user.id)
+            if user:
+                establishment = user.establishment
+    kb = await menu_keyboard(user_establishment=establishment)
+    await message.answer("<b>Главное меню:</b>", reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "menu_promotions")
@@ -66,7 +73,14 @@ async def events(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "menu_back")
 async def menu_back(callback: CallbackQuery) -> None:
-    await callback.message.answer("📱 <b>Главное меню</b>\n\nВыберите раздел:", reply_markup=menu_keyboard(with_update_profile=True), parse_mode="HTML")
+    establishment = None
+    if callback.from_user:
+        async with SessionLocal() as session:
+            user = await session.get(User, callback.from_user.id)
+            if user:
+                establishment = user.establishment
+    kb = await menu_keyboard(with_update_profile=True, user_establishment=establishment)
+    await callback.message.answer("📱 <b>Главное меню</b>\n\nВыберите раздел:", reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
 

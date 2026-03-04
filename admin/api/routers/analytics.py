@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from admin.api.deps import get_current_admin
 from admin.api.schemas import GenericMessage
 from admin.api.services import analytics_csv
-from database.models import AdminUser, Delivery, Mailing, MailingStat, MailingStatus, News, Promotion, User, UserType
+from database.models import AdminUser, Delivery, MailingStat, News, Promotion, User, UserType
 from database.session import get_db
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -37,25 +37,6 @@ async def analytics_users(
         ),
     }
     return GenericMessage(message="ok", data=by_type)
-
-
-@router.get("/mailings", response_model=GenericMessage)
-async def analytics_mailings(
-    db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(get_current_admin),
-) -> GenericMessage:
-    _ = admin
-    total = await db.scalar(select(func.count(Mailing.id))) or 0
-    sent = await db.scalar(select(func.count(Mailing.id)).where(Mailing.status == MailingStatus.SENT)) or 0
-    opened = await db.scalar(select(func.count(MailingStat.id)).where(MailingStat.opened_at.is_not(None))) or 0
-    clicked = await db.scalar(select(func.count(MailingStat.id)).where(MailingStat.clicked_at.is_not(None))) or 0
-    delivered = await db.scalar(select(func.count(MailingStat.id)).where(MailingStat.sent_at.is_not(None))) or 0
-    open_rate = round((opened / delivered) * 100, 2) if delivered else 0
-    ctr = round((clicked / delivered) * 100, 2) if delivered else 0
-    return GenericMessage(
-        message="ok",
-        data={"total": total, "sent": sent, "delivered": delivered, "opened": opened, "clicked": clicked, "open_rate": open_rate, "ctr": ctr},
-    )
 
 
 @router.get("/content", response_model=GenericMessage)
@@ -130,13 +111,6 @@ async def analytics_export(
         "users_total": await db.scalar(select(func.count(User.id))) or 0,
         "users_horeca": await db.scalar(select(func.count(User.id)).where(User.user_type == UserType.HORECA)) or 0,
         "users_retail": await db.scalar(select(func.count(User.id)).where(User.user_type == UserType.RETAIL)) or 0,
-        "mailings_total": await db.scalar(select(func.count(Mailing.id))) or 0,
-        "mailings_sent": await db.scalar(select(func.count(Mailing.id)).where(Mailing.status == MailingStatus.SENT)) or 0,
-        "mailing_messages_sent": await db.scalar(select(func.count(MailingStat.id)).where(MailingStat.sent_at.is_not(None))) or 0,
-        "mailing_messages_opened": await db.scalar(select(func.count(MailingStat.id)).where(MailingStat.opened_at.is_not(None)))
-        or 0,
-        "mailing_messages_clicked": await db.scalar(select(func.count(MailingStat.id)).where(MailingStat.clicked_at.is_not(None)))
-        or 0,
         "content_active": (
             (await db.scalar(select(func.count(Promotion.id)).where(Promotion.is_active.is_(True))) or 0)
             + (await db.scalar(select(func.count(News.id)).where(News.is_active.is_(True))) or 0)

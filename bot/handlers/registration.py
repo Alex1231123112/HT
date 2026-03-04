@@ -68,9 +68,10 @@ async def start(message: Message, state: FSMContext) -> None:
             user = await session.get(User, message.from_user.id)
             if user is not None and user.deleted_at is None:
                 await state.clear()
+                kb = await menu_keyboard(with_update_profile=True, user_establishment=user.establishment)
                 await message.answer(
                     "С возвращением! Выберите раздел:",
-                    reply_markup=menu_keyboard(with_update_profile=True),
+                    reply_markup=kb,
                     parse_mode="HTML",
                 )
                 return
@@ -272,4 +273,5 @@ async def save_position_and_finish(message: Message, state: FSMContext) -> None:
         "Добро пожаловать в семью! 👋"
     )
     await message.answer(confirm, parse_mode="HTML")
-    await message.answer("Выберите раздел:", reply_markup=menu_keyboard(with_update_profile=True))
+    kb = await menu_keyboard(with_update_profile=True, user_establishment=establishment)
+    await message.answer("Выберите раздел:", reply_markup=kb)

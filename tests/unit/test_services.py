@@ -1,17 +1,5 @@
-from admin.api.services import analytics_csv, logs_csv, matches_target, users_csv
-from database.models import Mailing, MailingTarget, User, UserType
-
-
-def test_matches_target_all():
-    user = User(id=1, user_type=UserType.HORECA, establishment="A")
-    mailing = Mailing(text="x", target_type=MailingTarget.ALL)
-    assert matches_target(user, mailing) is True
-
-
-def test_matches_target_custom():
-    user = User(id=7, user_type=UserType.RETAIL, establishment="A")
-    mailing = Mailing(text="x", target_type=MailingTarget.CUSTOM, custom_targets=[7, 8])
-    assert matches_target(user, mailing) is True
+from admin.api.services import analytics_csv, logs_csv, users_csv
+from database.models import User, UserType
 
 
 def test_csv_builders():

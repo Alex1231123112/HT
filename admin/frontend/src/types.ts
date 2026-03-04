@@ -25,11 +25,9 @@ export type DashboardStats = {
   horeca: number;
   retail: number;
   active_content: number;
-  total_mailings: number;
   new_today?: number;
   new_week?: number;
   new_month?: number;
-  mailings_month?: number;
   active_promotions?: number;
   active_news?: number;
   active_deliveries?: number;
@@ -43,28 +41,6 @@ export type LogsResponse = {
 };
 export type SettingsResponse = { message: string; data: Record<string, string> };
 export type BackupsResponse = { message: string; data: { files: string[] } };
-
-export type Mailing = {
-  id: number;
-  text: string;
-  media_url: string | null;
-  media_type: "photo" | "video" | "none";
-  target_type: "all" | "horeca" | "retail" | "custom";
-  custom_targets: number[] | null;
-  scheduled_at: string | null;
-  sent_at: string | null;
-  status: "draft" | "scheduled" | "sent" | "cancelled";
-  send_attempts?: number;
-  last_error?: string | null;
-};
-
-export type MailingStats = {
-  sent: number;
-  opened: number;
-  clicked: number;
-  open_rate: number;
-  ctr: number;
-};
 
 export type ContentKind = "promotions" | "news" | "deliveries";
 

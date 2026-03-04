@@ -6,11 +6,9 @@ type StatsOut = {
   horeca: number;
   retail: number;
   active_content: number;
-  total_mailings: number;
   new_today?: number;
   new_week?: number;
   new_month?: number;
-  mailings_month?: number;
   active_promotions?: number;
   active_news?: number;
   active_deliveries?: number;
@@ -44,8 +42,6 @@ export function DashboardPage() {
         <div>Активные акции: {stats?.active_promotions ?? 0}</div>
         <div>Активные новинки: {stats?.active_news ?? 0}</div>
         <div>Активные приходы: {stats?.active_deliveries ?? 0}</div>
-        <div>Рассылки: {stats?.total_mailings ?? 0}</div>
-        <div>Рассылки за месяц: {stats?.mailings_month ?? 0}</div>
       </section>
 
       <section className="card">
@@ -65,7 +61,6 @@ export function DashboardPage() {
         <h3>Быстрые действия</h3>
         <div className="row left wrap">
           <button onClick={() => navigate("/promotions")}>Новая акция</button>
-          <button onClick={() => navigate("/mailings")}>Создать рассылку</button>
           <button onClick={() => navigate("/analytics")}>Отчет</button>
           <button onClick={() => navigate("/users")}>Экспорт пользователей</button>
         </div>

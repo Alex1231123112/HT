@@ -95,6 +95,8 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_CSRF_TOKEN: ${CSRF_SECRET:-ac70da5b0adc0cd35ea5abf1a98f680e1712f390b2ea225f59bb989f86dcfb09}
     ports:
       - "5173:80"
     depends_on:

@@ -10,8 +10,6 @@ import {
   GenericDataResponse,
   GenericResp,
   LogsResponse,
-  Mailing,
-  MailingStats,
   SettingsResponse,
   User,
 } from "../types";
@@ -28,9 +26,6 @@ export function useAdminData() {
   const [promotions, setPromotions] = useState<ContentItem[]>([]);
   const [news, setNews] = useState<ContentItem[]>([]);
   const [deliveries, setDeliveries] = useState<ContentItem[]>([]);
-  const [mailings, setMailings] = useState<Mailing[]>([]);
-  const [mailingPreview, setMailingPreview] = useState("");
-  const [mailingStats, setMailingStats] = useState<Record<number, MailingStats>>({});
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [logs, setLogs] = useState<Array<{ id: number; action: string; details?: string; admin_id?: number; created_at: string }>>([]);
   const [logFilter, setLogFilter] = useState("");
@@ -38,21 +33,11 @@ export function useAdminData() {
   const [backups, setBackups] = useState<string[]>([]);
   const [usersChart, setUsersChart] = useState<Array<{ date: string; count: number }>>([]);
   const [usersAnalytics, setUsersAnalytics] = useState<Record<string, number>>({});
-  const [mailingsAnalytics, setMailingsAnalytics] = useState<Record<string, number>>({});
   const [contentAnalytics, setContentAnalytics] = useState<Record<string, number>>({});
   const [cohortRows, setCohortRows] = useState<Array<{ cohort: string; users: number }>>([]);
   const [conversionAnalytics, setConversionAnalytics] = useState<Record<string, number>>({});
   const [admins, setAdmins] = useState<AdminAccount[]>([]);
   const [login, setLoginState] = useState({ username: "admin", password: "change-me", remember: false });
-  const [mailForm, setMailForm] = useState({
-    text: "",
-    target_type: "all" as "all" | "horeca" | "retail" | "custom",
-    media_type: "none" as "none" | "photo" | "video",
-    media_url: "",
-    scheduled_at: "",
-    establishment: "",
-    speed: "medium" as "high" | "medium" | "low",
-  });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [creatingUser, setCreatingUser] = useState({
     id: "",
@@ -78,18 +63,16 @@ export function useAdminData() {
     setLoading(true);
     try {
       await fetchMe();
-      const [u, p, n, d, m, s, lg, st, backupResp, au, am, ac, chart, cohort, conversions] = await Promise.all([
+      const [u, p, n, d, s, lg, st, backupResp, au, ac, chart, cohort, conversions] = await Promise.all([
         apiGet<User[]>("/users"),
         apiGet<ContentItem[]>("/promotions"),
         apiGet<ContentItem[]>("/news"),
         apiGet<ContentItem[]>("/deliveries"),
-        apiGet<Mailing[]>("/mailings"),
         apiGet<DashboardStats>("/dashboard/stats"),
         apiGet<LogsResponse>("/logs?limit=50"),
         apiGet<SettingsResponse>("/settings"),
         apiGet<BackupsResponse>("/settings/backups"),
         apiGet<GenericDataResponse>("/analytics/users"),
-        apiGet<GenericDataResponse>("/analytics/mailings"),
         apiGet<GenericDataResponse>("/analytics/content"),
         apiGet<GenericDataResponse>("/dashboard/users-chart"),
         apiGet<GenericDataResponse>("/analytics/cohort"),
@@ -99,13 +82,11 @@ export function useAdminData() {
       setPromotions(p);
       setNews(n);
       setDeliveries(d);
-      setMailings(m);
       setStats(s);
       setLogs(lg.data.items);
       setSystemSettings(st.data ?? {});
       setBackups(backupResp.data.files ?? []);
       setUsersAnalytics(au.data as unknown as Record<string, number>);
-      setMailingsAnalytics(am.data as unknown as Record<string, number>);
       setContentAnalytics(ac.data as unknown as Record<string, number>);
       setUsersChart(((chart.data?.daily_growth as Array<{ date: string; count: number }> | undefined) ?? []).slice(-14));
       setCohortRows((cohort.data?.rows as Array<{ cohort: string; users: number }>) ?? []);
@@ -244,82 +225,6 @@ export function useAdminData() {
     setContentForms((prev) => ({ ...prev, [kind]: { ...prev[kind], image_url: mediaUrl } }));
   };
 
-  const uploadMailMedia = async (file: File | null) => {
-    if (!file) return;
-    const data = await apiUploadMedia(file);
-    const mediaUrl = data.url ?? (data.filename ? `/uploads/${data.filename}` : "");
-    setMailForm((prev) => ({ ...prev, media_url: mediaUrl }));
-  };
-
-  const createMailing = async () => {
-    if (!mailForm.text.trim()) {
-      setError("Текст рассылки обязателен.");
-      return;
-    }
-    let customTargets: number[] | null = null;
-    if (mailForm.target_type === "custom") {
-      customTargets = users.filter((item) => item.establishment === mailForm.establishment).map((item) => item.id);
-    }
-    await apiPost(
-      "/mailings",
-      {
-        text: mailForm.text,
-        target_type: mailForm.target_type,
-        media_type: mailForm.media_type,
-        media_url: mailForm.media_url || null,
-        custom_targets: customTargets,
-        scheduled_at: mailForm.scheduled_at || null,
-        speed: mailForm.speed,
-      },
-      true,
-    );
-    setMailForm({
-      text: "",
-      target_type: "all",
-      media_type: "none",
-      media_url: "",
-      scheduled_at: "",
-      establishment: "",
-      speed: "medium",
-    });
-    await refresh();
-  };
-
-  const sendTestMailing = async (mailingId: number) => {
-    await apiPost(`/mailings/${mailingId}/test-send`, {}, true);
-    setNotice("Тестовая отправка выполнена.");
-  };
-
-  const previewMailing = async (id: number) => {
-    const response = await apiPost<GenericResp>(`/mailings/${id}/preview`, {}, false);
-    setMailingPreview(`Текст: ${String(response.data?.text ?? "")}\nМедиа: ${String(response.data?.media ?? "нет")}`);
-  };
-
-  const sendMailing = async (id: number) => {
-    await apiPost(`/mailings/${id}/send`, {}, true);
-    await refresh();
-  };
-
-  const cancelMailing = async (id: number) => {
-    await apiPost(`/mailings/${id}/cancel`, {}, true);
-    await refresh();
-  };
-
-  const retryMailing = async (id: number) => {
-    await apiPost(`/mailings/${id}/retry`, {}, true);
-    await refresh();
-  };
-
-  const deleteMailing = async (id: number) => {
-    await apiDelete(`/mailings/${id}`);
-    await refresh();
-  };
-
-  const fetchMailingStats = async (id: number) => {
-    const response = await apiGet<GenericResp>(`/mailings/${id}/stats`);
-    setMailingStats((prev) => ({ ...prev, [id]: response.data as unknown as MailingStats }));
-  };
-
   const createBackup = async () => {
     await apiPost("/settings/backup", {}, true);
     await refresh();
@@ -390,9 +295,6 @@ export function useAdminData() {
     promotions,
     news,
     deliveries,
-    mailings,
-    mailingPreview,
-    mailingStats,
     stats,
     logs,
     logFilter,
@@ -402,15 +304,12 @@ export function useAdminData() {
     backups,
     usersChart,
     usersAnalytics,
-    mailingsAnalytics,
     contentAnalytics,
     cohortRows,
     conversionAnalytics,
     admins,
     login,
     setLoginState,
-    mailForm,
-    setMailForm,
     editingUser,
     setEditingUser,
     creatingUser,
@@ -431,15 +330,6 @@ export function useAdminData() {
     deleteContent,
     duplicatePromotion,
     uploadContentMedia,
-    uploadMailMedia,
-    createMailing,
-    sendTestMailing,
-    previewMailing,
-    sendMailing,
-    cancelMailing,
-    retryMailing,
-    deleteMailing,
-    fetchMailingStats,
     createBackup,
     saveSettings,
     createAdmin,

@@ -4,6 +4,7 @@
 """
 import html
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +23,7 @@ from database.models import (
     Event,
     News,
     Promotion,
+    TelegramDeliveryLog,
     User,
 )
 
@@ -35,13 +37,18 @@ def _escape(s: str | None) -> str:
 
 
 def _normalize_html_for_telegram(html: str | None) -> str:
-    """Санитизирует HTML по белому списку Telegram и приводит <p> к переносам для отображения."""
+    """Санитизирует HTML для Telegram: <p>→переносы, rel/target убираем. Telegram не поддерживает <br>, используем \\n."""
     from admin.api.html_sanitizer import sanitize_html_for_telegram
 
     if not html or not html.strip():
         return ""
     cleaned = sanitize_html_for_telegram(html)
-    return cleaned.replace("</p>", "<br>").replace("<p>", "").strip()
+    cleaned = cleaned.replace("</p>", "\n").replace("<p>", "").strip()
+    cleaned = re.sub(r'\s+rel="[^"]*"', "", cleaned)
+    cleaned = re.sub(r'\s+target="[^"]*"', "", cleaned)
+    # Telegram HTML не поддерживает <br> — заменяем на \n
+    cleaned = re.sub(r'<br\s*/?>', "\n", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _content_type_value(ct: Any) -> str:
@@ -76,7 +83,7 @@ async def get_plan_message(db: AsyncSession, plan: ContentPlan) -> tuple[str, st
     title = getattr(item, "title", None) or plan.title
     desc = getattr(item, "description", None) or ""
     media = getattr(item, "image_url", None)
-    return (_escape(title), _escape(desc), (media.strip() if media else None) or None)
+    return (_escape(title), _normalize_html_for_telegram(desc), (media.strip() if media else None) or None)
 
 
 async def get_item_message(db: AsyncSession, item: ContentPlanItem) -> tuple[str, str, str | None]:
@@ -104,7 +111,7 @@ async def get_item_message(db: AsyncSession, item: ContentPlanItem) -> tuple[str
     title = getattr(entity, "title", None) or item.custom_title or "Сообщение"
     desc = getattr(entity, "description", None) or ""
     media = getattr(entity, "image_url", None)
-    return (_escape(title), _escape(desc), (media.strip() if media else None) or None)
+    return (_escape(title), _normalize_html_for_telegram(desc), (media.strip() if media else None) or None)
 
 
 def _build_text(title: str, description: str) -> str:
@@ -135,6 +142,9 @@ async def _send_one_message(
     description: str,
     media_url: str | None,
     *,
+    plan_id: int,
+    plan_title: str,
+    admin_id: int | None = None,
     telegram_client: httpx.AsyncClient | None = None,
 ) -> tuple[int, int, list[str]]:
     """Отправить одно сообщение (title, description, media) во все каналы из rows. Возвращает (sent_bot, sent_channel, errors)."""
@@ -142,6 +152,20 @@ async def _send_one_message(
     sent_bot = 0
     sent_channel = 0
     errors: list[str] = []
+
+    def _log(chan_type: str, target: str, success: bool, err: str | None = None) -> None:
+        db.add(
+            TelegramDeliveryLog(
+                plan_id=plan_id,
+                plan_title=plan_title,
+                channel_type=chan_type,
+                target=target,
+                success=success,
+                error_message=err,
+                admin_id=admin_id,
+            )
+        )
+
     for ch in rows:
         if ch.channel_type == DistributionChannelType.BOT:
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
@@ -152,20 +176,26 @@ async def _send_one_message(
                     )
                 else:
                     result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                target = f"user:{uid}"
                 if result:
                     sent_bot += 1
+                    _log("bot", target, True)
                 else:
                     errors.append(f"bot user {uid}" + (f": {err_msg}" if err_msg else ""))
+                    _log("bot", target, False, err_msg)
         elif ch.channel_type == DistributionChannelType.TELEGRAM_CHANNEL and ch.telegram_ref:
             chat = _normalize_channel_ref(ch.telegram_ref)
             if media_url:
                 result, err_msg = await tg.send_photo(bot_token, chat, media_url, caption=text, client=telegram_client)
             else:
                 result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+            target = chat
             if result:
                 sent_channel += 1
+                _log("telegram_channel", target, True)
             else:
                 errors.append(f"канал {chat}" + (f": {err_msg}" if err_msg else ""))
+                _log("telegram_channel", target, False, err_msg)
     return sent_bot, sent_channel, errors
 
 
@@ -174,6 +204,7 @@ async def send_plan_to_telegram(
     plan: ContentPlan,
     bot_token: str,
     *,
+    admin_id: int | None = None,
     telegram_client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     """
@@ -203,13 +234,17 @@ async def send_plan_to_telegram(
         )
     ).scalars().all()
 
+    plan_id = plan.id
+    plan_title = (plan.title or "План")[:255]
+    send_kw = {"plan_id": plan_id, "plan_title": plan_title, "admin_id": admin_id, "telegram_client": telegram_client}
+
     if items:
         # Несколько сообщений в плане: отправляем по порядку
         for row in items:
             item_entity = row[0]
             title, description, media_url = await get_item_message(db, item_entity)
             sb, sc, errs = await _send_one_message(
-                db, bot_token, rows, title, description, media_url, telegram_client=telegram_client
+                db, bot_token, rows, title, description, media_url, **send_kw
             )
             sent_bot += sb
             sent_channel += sc
@@ -218,7 +253,7 @@ async def send_plan_to_telegram(
         # Одно сообщение из полей плана (как раньше)
         title, description, media_url = await get_plan_message(db, plan)
         sent_bot, sent_channel, errors = await _send_one_message(
-            db, bot_token, rows, title, description, media_url, telegram_client=telegram_client
+            db, bot_token, rows, title, description, media_url, **send_kw
         )
 
     return {"sent_bot": sent_bot, "sent_channel": sent_channel, "errors": errors, "channels_count": channels_count}

@@ -205,7 +205,7 @@ async def send_plan_now(
             status_code=500,
             detail="BOT_TOKEN не задан в .env. Укажите токен бота для отправки в Telegram.",
         )
-    result = await send_plan_to_telegram(db, plan, settings.bot_token)
+    result = await send_plan_to_telegram(db, plan, settings.bot_token, admin_id=admin.id)
     plan.status = ContentPlanStatus.SENT
     plan.sent_at = datetime.utcnow()
     db.add(plan)

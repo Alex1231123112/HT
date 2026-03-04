@@ -179,6 +179,15 @@ textarea {
 .rich-editor-wrap .ql-editor {
   min-height: 120px;
 }
+/* Ссылки в редакторе — без ореола (глобальный a добавляет border/background) */
+.rich-editor-wrap .ql-editor a {
+  border: none;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: #1890ff;
+  text-decoration: underline;
+}
 .rich-editor-wrap .ql-toolbar .ql-formats {
   margin-right: 12px;
 }

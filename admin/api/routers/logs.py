@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api.deps import require_roles
 from admin.api.schemas import GenericMessage
-from admin.api.services import logs_csv
-from database.models import ActivityLog, AdminUser
+from admin.api.services import delivery_logs_csv, logs_csv
+from database.models import ActivityLog, AdminUser, TelegramDeliveryLog
 from database.session import get_db
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
@@ -45,6 +45,7 @@ def _build_pdf(log_rows: list[dict]) -> bytes:
 async def _cleanup_old_logs(db: AsyncSession, retention_days: int = 90) -> None:
     cutoff = datetime.utcnow() - timedelta(days=retention_days)
     await db.execute(delete(ActivityLog).where(ActivityLog.created_at < cutoff))
+    await db.execute(delete(TelegramDeliveryLog).where(TelegramDeliveryLog.created_at < cutoff))
     await db.commit()
 
 
@@ -126,4 +127,86 @@ async def export_logs(
         iter([logs_csv(data)]),
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="logs.csv"'},
+    )
+
+
+@router.get("/deliveries", response_model=GenericMessage)
+async def delivery_logs(
+    limit: int = Query(default=500, le=5000),
+    plan_id: int | None = Query(default=None),
+    success: bool | None = Query(default=None),
+    from_date: datetime | None = Query(default=None),
+    to_date: datetime | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
+) -> GenericMessage:
+    _ = admin
+    await _cleanup_old_logs(db)
+    query = select(TelegramDeliveryLog).order_by(TelegramDeliveryLog.created_at.desc()).limit(limit)
+    if plan_id is not None:
+        query = query.where(TelegramDeliveryLog.plan_id == plan_id)
+    if success is not None:
+        query = query.where(TelegramDeliveryLog.success == success)
+    if from_date:
+        query = query.where(TelegramDeliveryLog.created_at >= from_date)
+    if to_date:
+        query = query.where(TelegramDeliveryLog.created_at <= to_date)
+    rows = list((await db.scalars(query)).all())
+    data = [
+        {
+            "id": row.id,
+            "plan_id": row.plan_id,
+            "plan_title": row.plan_title,
+            "channel_type": row.channel_type,
+            "target": row.target,
+            "success": row.success,
+            "error_message": row.error_message,
+            "admin_id": row.admin_id,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+    return GenericMessage(message="ok", data={"items": data})
+
+
+@router.get("/deliveries/export")
+async def export_delivery_logs(
+    limit: int = Query(default=5000, le=50000),
+    plan_id: int | None = Query(default=None),
+    success: bool | None = Query(default=None),
+    from_date: datetime | None = Query(default=None),
+    to_date: datetime | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(require_roles("superadmin", "admin")),
+) -> StreamingResponse:
+    _ = admin
+    await _cleanup_old_logs(db)
+    query = select(TelegramDeliveryLog).order_by(TelegramDeliveryLog.created_at.desc()).limit(limit)
+    if plan_id is not None:
+        query = query.where(TelegramDeliveryLog.plan_id == plan_id)
+    if success is not None:
+        query = query.where(TelegramDeliveryLog.success == success)
+    if from_date:
+        query = query.where(TelegramDeliveryLog.created_at >= from_date)
+    if to_date:
+        query = query.where(TelegramDeliveryLog.created_at <= to_date)
+    rows = list((await db.scalars(query)).all())
+    data = [
+        {
+            "id": row.id,
+            "plan_id": row.plan_id,
+            "plan_title": row.plan_title,
+            "channel_type": row.channel_type,
+            "target": row.target,
+            "success": row.success,
+            "error_message": row.error_message,
+            "admin_id": row.admin_id,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+    return StreamingResponse(
+        iter([delivery_logs_csv(data)]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="delivery_logs.csv"'},
     )

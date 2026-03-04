@@ -5,17 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import (
-    Delivery,
-    Mailing,
-    MailingStat,
-    MailingStatus,
-    MailingTarget,
-    News,
-    Promotion,
-    User,
-    UserType,
-)
+from database.models import Delivery, News, Promotion, User, UserType
 
 
 async def list_content(model, db: AsyncSession, user_type: UserType | None):
@@ -80,38 +70,6 @@ async def delete_content(model, item_id: int, db: AsyncSession):
     await db.commit()
 
 
-def matches_target(user: User, mailing: Mailing) -> bool:
-    if mailing.target_type == MailingTarget.ALL:
-        return True
-    if mailing.target_type == MailingTarget.HORECA:
-        return user.user_type == UserType.HORECA
-    if mailing.target_type == MailingTarget.RETAIL:
-        return user.user_type == UserType.RETAIL
-    return bool(mailing.custom_targets and user.id in mailing.custom_targets)
-
-
-async def dispatch_mailing(db: AsyncSession, mailing: Mailing) -> int:
-    try:
-        users = list((await db.scalars(select(User).where(User.is_active.is_(True)))).all())
-        recipients = [u for u in users if matches_target(u, mailing)]
-        now = datetime.utcnow()
-        for recipient in recipients:
-            db.add(MailingStat(mailing_id=mailing.id, user_id=recipient.id, sent_at=now))
-        mailing.status = MailingStatus.SENT
-        mailing.sent_at = now
-        mailing.last_error = None
-        mailing.send_attempts += 1
-        db.add(mailing)
-        await db.commit()
-        return len(recipients)
-    except Exception as exc:
-        mailing.send_attempts += 1
-        mailing.last_error = str(exc)
-        db.add(mailing)
-        await db.commit()
-        raise
-
-
 async def content_count(db: AsyncSession) -> int:
     return (
         (await db.scalar(select(func.count(Promotion.id)).where(Promotion.is_active.is_(True))) or 0)
@@ -153,6 +111,18 @@ def logs_csv(log_rows: list[dict]) -> str:
     for row in log_rows:
         buff.write(
             f"{row['id']},{row.get('admin_id') or ''},{row['action']},{row['details'] or ''},{row['created_at']}\n"
+        )
+    return buff.getvalue()
+
+
+def delivery_logs_csv(rows: list[dict]) -> str:
+    buff = StringIO()
+    buff.write("id,plan_id,plan_title,channel_type,target,success,error_message,admin_id,created_at\n")
+    for row in rows:
+        buff.write(
+            f"{row['id']},{row['plan_id']},{_csv_escape(str(row.get('plan_title', '')))},{row['channel_type']},"
+            f"{_csv_escape(str(row.get('target', '')))},{row['success']},{_csv_escape(str(row.get('error_message') or ''))},"
+            f"{row.get('admin_id') or ''},{row['created_at']}\n"
         )
     return buff.getvalue()
 

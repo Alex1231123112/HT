@@ -215,7 +215,6 @@ function OneMessageFields({
 function ContentPlanForm({ isEdit = false }: { isEdit?: boolean }) {
   const form = Form.useFormInstance();
   const planContentType = Form.useWatch("content_type", form);
-  debugger;
   const items = Form.useWatch("items", form) ?? [];
   const planCustomTitle = Form.useWatch("custom_title", form);
   const planCustomDescription = Form.useWatch("custom_description", form);

@@ -1,4 +1,6 @@
 FROM node:20-alpine AS build
+ARG VITE_CSRF_TOKEN=dev-csrf
+ENV VITE_CSRF_TOKEN=$VITE_CSRF_TOKEN
 WORKDIR /app
 COPY admin/frontend/package.json ./
 RUN npm install

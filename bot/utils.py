@@ -49,13 +49,14 @@ def _is_video_url(url: str) -> bool:
 
 
 def _description_for_telegram(html_desc: str | None) -> str:
-    """Описание уже в HTML; нормализуем для Telegram (переносы, без лишних атрибутов)."""
+    """Описание уже в HTML; нормализуем для Telegram. Telegram не поддерживает <br>, используем \\n."""
     if not html_desc or not html_desc.strip():
         return ""
     s = html_desc.strip()
-    s = s.replace("</p>", "<br>").replace("<p>", "")
+    s = s.replace("</p>", "\n").replace("<p>", "")
     s = re.sub(r'\s+rel="[^"]*"', "", s)
     s = re.sub(r'\s+target="[^"]*"', "", s)
+    s = re.sub(r'<br\s*/?>', "\n", s, flags=re.IGNORECASE)
     return s.strip()
 
 

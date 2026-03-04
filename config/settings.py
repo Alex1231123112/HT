@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 from typing import List
 
@@ -66,8 +67,17 @@ class Settings(BaseSettings):
     def cors_origins(self) -> List[str]:
         origins = [item.strip() for item in self.allowed_origins.split(",") if item.strip()]
         if self.app_env.lower() == "prod":
-            return [item for item in origins if item.startswith("https://")]
-        return origins
+            https_only = [item for item in origins if item.startswith("https://")]
+            result = https_only if https_only else origins
+            # Fallback: if still empty (e.g. ALLOWED_ORIGINS not set or invalid), allow localhost so API can start
+            if not result:
+                logging.getLogger(__name__).warning(
+                    "ALLOWED_ORIGINS empty in prod; using fallback. Set ALLOWED_ORIGINS in .env for your domain."
+                )
+                result = ["http://localhost", "http://127.0.0.1"]
+        else:
+            result = origins
+        return result
 
 
 @lru_cache

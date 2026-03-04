@@ -31,6 +31,10 @@ test-integration:
 test-send:
 	docker compose run --rm api pytest tests/unit/test_telegram_sender.py tests/integration/test_content_plan_send.py -v
 
+# Smoke-тесты production (локально, PROD_URL обязателен)
+test-prod:
+	PROD_URL=$${PROD_URL} pytest tests/prod/ -v -m prod
+
 # Однократный запуск команды в контейнере API (пример: make run cmd="python -c 'print(1)'")
 run:
 	docker compose run --rm api $(cmd)

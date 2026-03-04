@@ -326,3 +326,19 @@ class ContentPlanItem(Base):
     custom_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     custom_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     custom_media_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class TelegramDeliveryLog(Base):
+    """Журнал отправок сообщений в Telegram (бот и каналы)."""
+
+    __tablename__ = "telegram_delivery_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("content_plan.id", ondelete="CASCADE"))
+    plan_title: Mapped[str] = mapped_column(String(255))  # для отображения
+    channel_type: Mapped[str] = mapped_column(String(50))  # bot | telegram_channel
+    target: Mapped[str] = mapped_column(String(255))  # user_id или @channel
+    success: Mapped[bool] = mapped_column(Boolean)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

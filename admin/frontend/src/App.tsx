@@ -21,7 +21,6 @@ const PageFallback = (
 
 const LoginPage = React.lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const DashboardPage = React.lazy(() => import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
-const MailingsPage = React.lazy(() => import("./pages/MailingsPage").then((m) => ({ default: m.MailingsPage })));
 const AnalyticsPage = React.lazy(() => import("./pages/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })));
 const AdminsList = React.lazy(() => import("./refine/pages/AdminsRefine").then((m) => ({ default: m.AdminsList })));
 const AdminsCreate = React.lazy(() => import("./refine/pages/AdminsRefine").then((m) => ({ default: m.AdminsCreate })));
@@ -122,7 +121,6 @@ export default function App() {
               meta: { label: "Поставки" },
             },
             { name: "events", list: "/events", create: "/events/create", edit: "/events/edit/:id", meta: { label: "Мероприятия" } },
-            { name: "mailings", list: "/mailings", meta: { label: "Рассылки" } },
             { name: "channels", list: "/channels", create: "/channels/create", edit: "/channels/edit/:id", meta: { label: "Каналы рассылки" } },
             { name: "content_plan", list: "/content-plan", create: "/content-plan/create", edit: "/content-plan/edit/:id", meta: { label: "Контент план" } },
             { name: "analytics", list: "/analytics", meta: { label: "Аналитика" } },
@@ -244,7 +242,6 @@ export default function App() {
                 <Route path="create" element={<EventsCreate />} />
                 <Route path="edit/:id" element={<EventsEdit />} />
               </Route>
-              <Route path="/mailings" element={<MailingsPage />} />
               <Route path="/channels">
                 <Route index element={<ChannelsList />} />
                 <Route path="create" element={<ChannelsCreate />} />

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Button, Input, Modal, Select, Space } from "antd";
+import { Button, Form, Input, Modal, Select, Space } from "antd";
 import type { FormInstance } from "antd";
 // @ts-expect-error no types for react-quill in tsconfig
 import ReactQuill from "react-quill";
@@ -349,16 +349,6 @@ export function CustomContentBlock({
         >
           <Input placeholder="https://..." />
         </Form.Item>
-
-        <div>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>Предпросмотр</div>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 6 }}>Как будет выглядеть в Telegram</div>
-          <PublicationPreview
-            title={previewTitle}
-            description={previewDescription}
-            mediaUrl={previewMediaUrl}
-          />
-        </div>
       </Space>
 
       <Modal

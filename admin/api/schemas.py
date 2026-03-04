@@ -8,9 +8,6 @@ from database.models import (
     ContentPlanContentType,
     ContentPlanStatus,
     DistributionChannelType,
-    MailingStatus,
-    MailingTarget,
-    MediaType,
     UserType,
 )
 
@@ -181,55 +178,14 @@ class EventRegistrationOut(BaseModel):
         from_attributes = True
 
 
-class MailingCreate(BaseModel):
-    text: str
-    media_url: str | None = None
-    media_type: MediaType = MediaType.NONE
-    target_type: MailingTarget
-    custom_targets: list[int] | None = None
-    scheduled_at: datetime | None = None
-    speed: str | None = "medium"
-
-
-class MailingUpdate(BaseModel):
-    text: str | None = None
-    media_url: str | None = None
-    media_type: MediaType | None = None
-    target_type: MailingTarget | None = None
-    custom_targets: list[int] | None = None
-    scheduled_at: datetime | None = None
-    status: MailingStatus | None = None
-
-
-class MailingOut(BaseModel):
-    id: int
-    text: str
-    media_url: str | None
-    media_type: MediaType
-    target_type: MailingTarget
-    custom_targets: list[int] | None
-    scheduled_at: datetime | None
-    sent_at: datetime | None
-    status: MailingStatus
-    created_at: datetime
-    send_attempts: int = 0
-    last_error: str | None = None
-    cancelled_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
-
-
 class StatsOut(BaseModel):
     total: int
     horeca: int
     retail: int
     active_content: int
-    total_mailings: int
     new_today: int = 0
     new_week: int = 0
     new_month: int = 0
-    mailings_month: int = 0
     active_promotions: int = 0
     active_news: int = 0
     active_deliveries: int = 0

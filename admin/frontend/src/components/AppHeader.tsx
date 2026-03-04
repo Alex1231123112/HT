@@ -8,7 +8,6 @@ const NAV_ITEMS: Array<{ to: string; label: string; roles?: Array<"superadmin" |
   { to: "/promotions", label: "Акции" },
   { to: "/news", label: "Новинки" },
   { to: "/deliveries", label: "Приходы" },
-  { to: "/mailings", label: "Рассылки" },
   { to: "/analytics", label: "Аналитика" },
   { to: "/settings", label: "Настройки", roles: ["superadmin"] },
   { to: "/logs", label: "Логи", roles: ["superadmin", "admin"] },

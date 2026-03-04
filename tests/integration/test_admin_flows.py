@@ -21,9 +21,9 @@ def test_dashboard_stats_has_extended_fields(api_client):
     assert "new_today" in payload
     assert "new_week" in payload
     assert "new_month" in payload
-    assert "mailings_month" in payload
 
 
+@pytest.mark.skip(reason="Mailings functionality removed")
 def test_create_send_and_stat_mailing(api_client):
     """Min audience = 3, use 32-bit safe user ids."""
     client = api_client
@@ -76,6 +76,7 @@ def test_create_send_and_stat_mailing(api_client):
     client.delete(f"/api/mailings/{mailing_id}", headers=headers)
 
 
+@pytest.mark.skip(reason="Mailings functionality removed")
 def test_mailing_smoke_multiple_recipients(api_client):
     """Smoke test: create mailing for several users, send, verify delivery stats (acceptance checklist). Ids fit 32-bit."""
     client = api_client

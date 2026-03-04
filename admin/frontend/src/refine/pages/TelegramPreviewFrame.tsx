@@ -53,7 +53,16 @@ export function TelegramPreviewFrame() {
   return (
     <>
       <style>{`
-        .telegram-preview-body a { color: #6ab2f2; text-decoration: none; }
+        .telegram-preview-body a {
+          color: #6ab2f2;
+          text-decoration: none;
+          background: none !important;
+          padding: 0;
+          border: none;
+          border-radius: 0;
+          box-shadow: none;
+          outline: none;
+        }
         .telegram-preview-body a:hover { text-decoration: underline; }
         .telegram-preview-body p, .telegram-preview-body div { margin: 0 0 0.2em 0; line-height: 1.35; }
         .telegram-preview-body p:last-child, .telegram-preview-body div:last-child { margin-bottom: 0; }

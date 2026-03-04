@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from "@refinedev/antd";
-import { Button, Form, Input, message, Modal, Select, Space, Switch, Table } from "antd";
+import { Button, Divider, Form, Input, message, Modal, Select, Space, Switch, Table } from "antd";
 import type { FormInstance } from "antd";
 import type { UploadProps } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
@@ -102,6 +102,9 @@ function ContentFormFields() {
 
   return (
     <>
+      <Divider orientation="left" plain style={{ marginTop: 0, marginBottom: 16, fontWeight: 600, color: "#262626" }}>
+        Текст и шаблон
+      </Divider>
       <Form.Item
         label="Шаблон"
         help="Подставить готовый шаблон в заголовок и описание. Свои шаблоны сохраняются в браузере."
@@ -121,7 +124,7 @@ function ContentFormFields() {
         </Space.Compact>
       </Form.Item>
       <Form.Item label="Заголовок" name="title" rules={[{ required: true }]}>
-        <Input placeholder="Заголовок" />
+        <Input placeholder="Заголовок" size="large" />
       </Form.Item>
       <Form.Item
         label="Описание"
@@ -130,7 +133,10 @@ function ContentFormFields() {
       >
         <RichTextEditor />
       </Form.Item>
-      <Form.Item label="Медиа (фото/видео для бота)" help="Загрузите файл или вставьте ссылку ниже.">
+      <Divider orientation="left" plain style={{ marginTop: 24, marginBottom: 16, fontWeight: 600, color: "#262626" }}>
+        Медиа
+      </Divider>
+      <Form.Item label="Фото или видео для бота" help="Загрузите файл или вставьте ссылку ниже.">
         <MediaUploadField />
       </Form.Item>
       <Form.Item label="Ссылка на медиа" name="image_url">
@@ -152,6 +158,9 @@ function ContentFormFields() {
           );
         }}
       </Form.Item>
+      <Divider orientation="left" plain style={{ marginTop: 24, marginBottom: 16, fontWeight: 600, color: "#262626" }}>
+        Публикация
+      </Divider>
       <Form.Item
         label="Аудитория"
         name="user_type"
@@ -218,19 +227,26 @@ export function ContentList({ resource }: { resource: "promotions" | "news" | "d
 
 const PREVIEW_DEBOUNCE_MS = 400;
 const PREVIEW_MESSAGE_TYPE = "UPDATE_PREVIEW";
-const PREVIEW_WIDTH_MIN = 280;
-const PREVIEW_WIDTH_MAX = 560;
-const PREVIEW_WIDTH_DEFAULT = 380;
+const PREVIEW_WIDTH_MIN = 300;
+const PREVIEW_WIDTH_MAX = 500;
+const PREVIEW_WIDTH_DEFAULT = 360;
 
 const FORM_COLUMN_STYLE: React.CSSProperties = {
   flex: 1,
-  minWidth: 400,
-  maxWidth: 520,
-  padding: "16px 12px",
-  background: "#fafafa",
+  minWidth: 520,
+  maxWidth: 800,
+  padding: "28px 32px 32px",
+  background: "#fff",
   borderRadius: 12,
   border: "1px solid #e8e8e8",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+};
+
+const PAGE_CONTENT_STYLE: React.CSSProperties = {
+  maxWidth: 1320,
+  margin: "0 auto",
+  padding: "20px 28px 40px",
+  width: "100%",
 };
 
 function sendPreviewToIframe(
@@ -247,12 +263,17 @@ function sendPreviewToIframe(
   }
 }
 
-function ResizablePreviewPanel({ form }: { form: FormInstance }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [previewWidth, setPreviewWidth] = useState(PREVIEW_WIDTH_DEFAULT);
-  const [resizing, setResizing] = useState(false);
-  const resizeStartRef = useRef({ x: 0, w: 0 });
-
+function PreviewColumn({
+  form,
+  previewWidth,
+  iframeRef,
+  onIframeLoad,
+}: {
+  form: FormInstance;
+  previewWidth: number;
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
+  onIframeLoad: () => void;
+}) {
   const title = Form.useWatch("title", form) ?? "";
   const description = Form.useWatch("description", form) ?? "";
   const image_url = Form.useWatch("image_url", form) ?? null;
@@ -267,6 +288,55 @@ function ResizablePreviewPanel({ form }: { form: FormInstance }) {
     }, PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [title, description, image_url]);
+
+  return (
+    <div
+      style={{
+        width: previewWidth,
+        minWidth: PREVIEW_WIDTH_MIN,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        position: "sticky",
+        top: 24,
+        alignSelf: "flex-start",
+      }}
+    >
+      <div style={{ marginBottom: 10, fontSize: 13, color: "#595959", fontWeight: 500 }}>
+        Превью в Telegram
+      </div>
+      <iframe
+        ref={iframeRef}
+        src="/telegram-preview"
+        title="Превью в стиле Telegram"
+        onLoad={onIframeLoad}
+        style={{
+          width: "100%",
+          height: 420,
+          minHeight: 420,
+          border: "1px solid #e8e8e8",
+          borderRadius: 12,
+          display: "block",
+          flex: 1,
+        }}
+      />
+    </div>
+  );
+}
+
+function FormAndPreviewLayout({
+  form,
+  formProps,
+  children,
+}: {
+  form: FormInstance;
+  formProps: object;
+  children: React.ReactNode;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(PREVIEW_WIDTH_DEFAULT);
+  const [resizing, setResizing] = useState(false);
+  const resizeStartRef = useRef({ x: 0, w: 0 });
 
   useEffect(() => {
     if (!resizing) return;
@@ -301,55 +371,32 @@ function ResizablePreviewPanel({ form }: { form: FormInstance }) {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "stretch",
-        width: "100%",
-        gap: 0,
-        minHeight: 460,
-      }}
-    >
-      <div
-        style={{
-          width: previewWidth,
-          minWidth: PREVIEW_WIDTH_MIN,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ marginBottom: 8, fontSize: 13, color: "#666" }}>Превью в Telegram</div>
-        <iframe
-          ref={iframeRef}
-          src="/telegram-preview"
-          title="Превью в стиле Telegram"
-          onLoad={onIframeLoad}
-          style={{
-            width: "100%",
-            height: 420,
-            minHeight: 420,
-            border: "1px solid #e8e8e8",
-            borderRadius: 12,
-            display: "block",
-            flex: 1,
-          }}
-        />
+    <div style={{ ...LAYOUT_WRAPPER_STYLE, minHeight: 460 }}>
+      <div style={FORM_COLUMN_STYLE}>
+        <Form {...formProps} layout="vertical">
+          {children}
+        </Form>
       </div>
       <div
         role="separator"
         onMouseDown={onResizerMouseDown}
         style={{
-          width: 8,
+          width: 10,
           flexShrink: 0,
           cursor: "col-resize",
           background: resizing ? "#1890ff" : "#e8e8e8",
-          borderRadius: 2,
-          marginLeft: 4,
-          marginRight: 4,
+          borderRadius: 4,
           alignSelf: "stretch",
+          userSelect: "none",
         }}
         aria-label="Изменить ширину превью"
+        title="Потяните для изменения ширины превью"
+      />
+      <PreviewColumn
+        form={form}
+        previewWidth={previewWidth}
+        iframeRef={iframeRef}
+        onIframeLoad={onIframeLoad}
       />
     </div>
   );
@@ -359,7 +406,7 @@ const LAYOUT_WRAPPER_STYLE: React.CSSProperties = {
   display: "flex",
   width: "100%",
   alignItems: "flex-start",
-  gap: 0,
+  gap: 24,
 };
 
 export function ContentCreate({ resource }: { resource: "promotions" | "news" | "deliveries" }) {
@@ -372,13 +419,10 @@ export function ContentCreate({ resource }: { resource: "promotions" | "news" | 
 
   return (
     <Create title="Создание контента" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
-      <div style={LAYOUT_WRAPPER_STYLE}>
-        <ResizablePreviewPanel form={form} />
-        <div style={FORM_COLUMN_STYLE}>
-          <Form {...formProps} layout="vertical">
-            <ContentFormFields />
-          </Form>
-        </div>
+      <div style={PAGE_CONTENT_STYLE}>
+        <FormAndPreviewLayout form={form} formProps={formProps}>
+          <ContentFormFields />
+        </FormAndPreviewLayout>
       </div>
     </Create>
   );
@@ -393,13 +437,10 @@ export function ContentEdit({ resource }: { resource: "promotions" | "news" | "d
 
   return (
     <Edit title="Редактирование контента" saveButtonProps={{ ...saveButtonProps, children: "Сохранить" }}>
-      <div style={LAYOUT_WRAPPER_STYLE}>
-        <ResizablePreviewPanel form={form} />
-        <div style={FORM_COLUMN_STYLE}>
-          <Form {...formProps} layout="vertical">
-            <ContentFormFields />
-          </Form>
-        </div>
+      <div style={PAGE_CONTENT_STYLE}>
+        <FormAndPreviewLayout form={form} formProps={formProps}>
+          <ContentFormFields />
+        </FormAndPreviewLayout>
       </div>
     </Edit>
   );

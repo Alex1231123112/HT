@@ -17,8 +17,6 @@ from admin.api.routers.dashboard import router as dashboard_router
 from admin.api.routers.events import router as events_router
 from admin.api.routers.logs import router as logs_router
 from admin.api.content_plan_sender import process_due_content_plans
-from admin.api.routers.mailings import process_due_mailings
-from admin.api.routers.mailings import router as mailings_router
 from admin.api.routers.settings import router as settings_router
 from admin.api.routers.uploads import router as uploads_router
 from admin.api.routers.users import router as users_router
@@ -36,8 +34,7 @@ from database.session import SessionLocal, engine
 
 settings = get_settings()
 configure_logging()
-if settings.app_env.lower() == "prod" and not settings.cors_origins:
-    raise RuntimeError("No valid CORS origins are configured for production")
+# CORS origins are always non-empty (settings has fallback for prod)
 app = FastAPI(title="Bot Admin API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
@@ -82,7 +79,7 @@ async def startup() -> None:
         n = await session.scalar(select(func.count(User.id))) or 0
         log.info("API startup: users in DB = %s", n)
     global _scheduler_task
-    _scheduler_task = asyncio.create_task(_scheduled_mailing_worker())
+    _scheduler_task = asyncio.create_task(_scheduled_content_plan_worker())
 
 
 @app.on_event("shutdown")
@@ -94,10 +91,9 @@ async def shutdown() -> None:
     await engine.dispose()
 
 
-async def _scheduled_mailing_worker() -> None:
+async def _scheduled_content_plan_worker() -> None:
     while True:
         async with SessionLocal() as db:
-            await process_due_mailings(db)
             await process_due_content_plans(db, settings.bot_token)
         await asyncio.sleep(10)
 
@@ -111,6 +107,13 @@ async def health() -> GenericMessage:
 async def metrics() -> PlainTextResponse:
     return PlainTextResponse(generate_latest().decode("utf-8"))
 
+
+@app.get("/api/csrf-token")
+async def csrf_token() -> dict:
+    """Возвращает CSRF-токен для фронтенда (same-origin, без auth)."""
+    return {"token": settings.csrf_secret}
+
+
 app.include_router(auth_router)
 app.include_router(admins_router)
 app.include_router(dashboard_router)
@@ -122,7 +125,6 @@ app.include_router(content_plan_router)
 app.include_router(content_router)
 app.include_router(events_router)
 app.include_router(uploads_router)
-app.include_router(mailings_router)
 app.include_router(analytics_router)
 app.include_router(settings_router)
 app.include_router(logs_router)

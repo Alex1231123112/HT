@@ -280,9 +280,10 @@ def test_events_crud(api_client):
     assert get_after.status_code == 404
 
 
-# --- Mailings ---
+# --- Mailings (removed) ---
 
 
+@pytest.mark.skip(reason="Mailings functionality removed")
 def test_mailings_list_create_get_preview(api_client):
     client = api_client
     headers = _login(client)
@@ -333,6 +334,7 @@ def test_mailings_list_create_get_preview(api_client):
         client.delete(f"/api/users/{uid}", headers=headers)
 
 
+@pytest.mark.skip(reason="Mailings functionality removed")
 def test_mailings_send_and_stats(api_client):
     """Создаёт рассылку, отправляет, проверяет stats (как test_admin_flows)."""
     client = api_client
@@ -527,10 +529,6 @@ def test_analytics_users_mailings_content(api_client):
     assert "data" in r.json()
     assert "total" in r.json()["data"]
 
-    r2 = client.get("/api/analytics/mailings", headers=headers)
-    assert r2.status_code == 200
-    assert "data" in r2.json()
-
     r3 = client.get("/api/analytics/content", headers=headers)
     assert r3.status_code == 200
     assert "data" in r3.json()
@@ -558,7 +556,6 @@ def test_dashboard_stats(api_client):
     assert "new_today" in payload
     assert "new_week" in payload
     assert "total" in payload
-    assert "mailings_month" in payload
 
 
 def test_dashboard_users_chart_and_activity(api_client):

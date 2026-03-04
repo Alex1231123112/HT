@@ -1,8 +1,20 @@
 import type { AccessControlProvider, AuthProvider, DataProvider, HttpError } from "@refinedev/core";
 
 const DEFAULT_API_URL = "http://localhost:8000/api";
-const CSRF_TOKEN = import.meta.env.VITE_CSRF_TOKEN ?? "dev-csrf";
 const TOKEN_KEY = "token";
+
+let _csrfToken: string | null = null;
+
+async function getCsrfToken(): Promise<string> {
+  if (_csrfToken) return _csrfToken;
+  const apiBase = getApiUrl();
+  const url = apiBase.startsWith("http") ? apiBase.replace(/\/api\/?$/, "") + "/api/csrf-token" : "/api/csrf-token";
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("Failed to get CSRF token");
+  const data = (await r.json()) as { token?: string };
+  _csrfToken = data.token ?? "";
+  return _csrfToken;
+}
 
 declare global {
   interface Window {
@@ -26,9 +38,10 @@ export async function uploadContentFile(file: File): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append("file", file);
   const token = readToken();
+  const csrf = await getCsrfToken();
   const headers: HeadersInit = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    "X-CSRF-Token": CSRF_TOKEN,
+    "X-CSRF-Token": csrf,
   };
   const res = await fetch(`${getApiUrl()}/upload`, { method: "POST", headers, body: formData });
   if (!res.ok) {
@@ -41,12 +54,15 @@ export async function uploadContentFile(file: File): Promise<{ url: string }> {
   return { url };
 }
 
-const request = async <T = unknown>(path: string, init?: RequestInit, csrf = false): Promise<T> => {
+const request = async <T = unknown>(path: string, init?: RequestInit, _csrf = false): Promise<T> => {
   const token = readToken();
+  const method = (init?.method ?? "GET").toUpperCase();
+  const isMutating = method !== "GET" && method !== "HEAD";
+  const csrf = isMutating ? await getCsrfToken() : "";
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(csrf ? { "X-CSRF-Token": CSRF_TOKEN } : {}),
+    ...(isMutating && csrf ? { "X-CSRF-Token": csrf } : {}),
     ...(init?.headers ?? {}),
   };
 
@@ -103,6 +119,7 @@ const unwrapData = <T>(payload: unknown): T => {
 const toResourcePath = (resource: string) => {
   if (resource === "settings") return "/settings";
   if (resource === "logs") return "/logs";
+  if (resource === "delivery_logs") return "/logs/deliveries";
   if (resource === "content_plan") return "/content-plan";
   return `/${resource}`;
 };
@@ -110,7 +127,7 @@ const toResourcePath = (resource: string) => {
 export const dataProvider: DataProvider = {
   getList: async ({ resource }) => {
     const payload = await request<unknown>(toResourcePath(resource));
-    if (resource === "logs" || resource === "admins") {
+    if (resource === "logs" || resource === "admins" || resource === "delivery_logs") {
       const data = unwrapData<{ items: unknown[] }>(payload);
       return { data: data.items ?? [], total: data.items?.length ?? 0 };
     }
@@ -298,11 +315,8 @@ export const accessControlProvider: AccessControlProvider = {
     if (resource === "settings" || resource === "admins") {
       return { can: role === "superadmin" };
     }
-    if (resource === "users" || resource === "logs" || resource === "managers" || resource === "establishments") {
+    if (resource === "users" || resource === "logs" || resource === "delivery_logs" || resource === "managers" || resource === "establishments") {
       return { can: role === "superadmin" || role === "admin" };
-    }
-    if (resource === "mailings" && (action === "delete" || action === "create" || action === "edit")) {
-      return { can: role !== "manager" };
     }
     if (resource === "channels" && action === "delete") {
       return { can: role === "superadmin" || role === "admin" };
