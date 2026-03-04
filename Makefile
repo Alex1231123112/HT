@@ -39,4 +39,11 @@ test-prod:
 run:
 	docker compose run --rm api $(cmd)
 
-.PHONY: up down logs-api test test-unit test-integration test-send run
+# Ruff lint (без Docker: ruff check . — нужен Python + pip install ruff)
+lint:
+	docker compose run --rm api ruff check .
+
+lint-fix:
+	docker compose run --rm api ruff check . --fix
+
+.PHONY: up down logs-api test test-unit test-integration test-send run lint lint-fix

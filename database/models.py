@@ -16,7 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database.base import Base
+from .base import Base
 
 
 def enum_values(enum_cls: type[StrEnum]) -> list[str]:
