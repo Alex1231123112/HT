@@ -1,5 +1,38 @@
 # Деплой на root@147.45.96.211
 
+## CI/CD через GitHub Actions
+
+При `push` в `main` после успешного CI автоматически запускается CD — деплой на сервер.
+
+**Секреты в GitHub** (Settings → Secrets and variables → Actions):
+
+| Секрет | Значение |
+|--------|----------|
+| `SSH_HOST` | `147.45.96.211` |
+| `SSH_USER` | `root` |
+| `SSH_PRIVATE_KEY` | Приватный SSH-ключ (содержимое `~/.ssh/id_ed25519` или `id_rsa`) |
+
+**Первый раз — настройка SSH-ключа:**
+```bash
+# Локально: сгенерировать ключ (без пароля — дважды Enter при запросе)
+ssh-keygen -t ed25519 -C "github-deploy" -f deploy_key
+
+# Windows PowerShell: если -N "" не работает, запустите без -N и нажмите Enter при passphrase
+
+# Публичный ключ — на сервер
+ssh-copy-id -i deploy_key.pub root@147.45.96.211
+# Windows: type deploy_key.pub | ssh root@147.45.96.211 "cat >> ~/.ssh/authorized_keys"
+
+# Приватный ключ — в GitHub Secrets (скопировать вывод)
+cat deploy_key
+# Windows: Get-Content deploy_key
+# Вставить в SSH_PRIVATE_KEY (включая строки -----BEGIN/END-----)
+```
+
+Ручной запуск: Actions → CD → Run workflow.
+
+---
+
 ## Подготовка (локально)
 
 1. **Создайте `.env` для production** (скопируйте `.env.example`):

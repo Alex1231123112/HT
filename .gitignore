@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .env
+deploy_key
+deploy_key.pub
 uploads/
 node_modules/
 admin/frontend/dist/
