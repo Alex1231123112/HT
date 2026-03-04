@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from datetime import date, datetime
 from enum import StrEnum
 
