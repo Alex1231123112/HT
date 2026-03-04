@@ -7,7 +7,9 @@ from database.base import Base
 
 config = context.config
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
+# Alembic uses sync engine; convert async URLs to sync
+url = settings.database_url.replace("+asyncpg", "").replace("+aiosqlite", "")
+config.set_main_option("sqlalchemy.url", url)
 target_metadata = Base.metadata
 
 
