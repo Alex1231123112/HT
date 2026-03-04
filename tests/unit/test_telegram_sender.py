@@ -1,6 +1,7 @@
 """Юнит-тесты отправки в Telegram (мок HTTP-клиента)."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from admin.api import telegram_sender as tg
 

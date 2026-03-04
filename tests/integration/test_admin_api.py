@@ -5,13 +5,13 @@
        pytest -m integration  (все интеграционные)
 """
 import time
+from datetime import datetime, timedelta
+from io import BytesIO
 
 import httpx
 import pytest
-from datetime import datetime, timedelta
 
 pytestmark = pytest.mark.integration
-from io import BytesIO
 
 CSRF = "dev-csrf"
 

@@ -24,7 +24,6 @@ from database.models import (
     ContentPlanChannel,
     ContentPlanItem,
     ContentPlanStatus,
-    DistributionChannel,
 )
 from database.session import get_db
 

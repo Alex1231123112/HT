@@ -10,7 +10,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from bot.keyboards import (
     edit_profile_keyboard,
-    menu_keyboard,
     profile_keyboard,
     remove_keyboard,
     request_phone_keyboard,

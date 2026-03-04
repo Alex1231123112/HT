@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from admin.api.deps import get_current_admin, require_roles, verify_csrf
 from admin.api.schemas import GenericMessage, ManagerCreate, ManagerOut, ManagerUpdate
-from database.models import ActivityLog, AdminUser, Manager, UserType
+from database.models import ActivityLog, AdminUser, Manager
 from database.session import get_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

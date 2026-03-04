@@ -9,21 +9,21 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 
+from admin.api.content_plan_sender import process_due_content_plans
 from admin.api.routers.admins import router as admins_router
 from admin.api.routers.analytics import router as analytics_router
 from admin.api.routers.auth import router as auth_router
+from admin.api.routers.channels import router as channels_router
 from admin.api.routers.content import router as content_router
+from admin.api.routers.content_plan import router as content_plan_router
 from admin.api.routers.dashboard import router as dashboard_router
+from admin.api.routers.establishments import router as establishments_router
 from admin.api.routers.events import router as events_router
 from admin.api.routers.logs import router as logs_router
-from admin.api.content_plan_sender import process_due_content_plans
+from admin.api.routers.managers import router as managers_router
 from admin.api.routers.settings import router as settings_router
 from admin.api.routers.uploads import router as uploads_router
 from admin.api.routers.users import router as users_router
-from admin.api.routers.establishments import router as establishments_router
-from admin.api.routers.managers import router as managers_router
-from admin.api.routers.channels import router as channels_router
-from admin.api.routers.content_plan import router as content_plan_router
 from admin.api.schemas import GenericMessage
 from admin.api.security import clear_revoked_tokens
 from config.logging import configure_logging
@@ -70,7 +70,9 @@ def _redact_db_url(url: str) -> str:
 @app.on_event("startup")
 async def startup() -> None:
     import logging
+
     from sqlalchemy import func, select
+
     clear_revoked_tokens()
     log = logging.getLogger("uvicorn.error")
     log.info("API DB: %s", _redact_db_url(settings.database_url))

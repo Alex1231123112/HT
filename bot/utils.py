@@ -1,13 +1,12 @@
 import html
 import logging
 import re
+from datetime import datetime
 from urllib.parse import urlparse
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
-
-from datetime import datetime
 
 from config.settings import get_settings
 from database.models import Event, EventRegistration, User, UserType

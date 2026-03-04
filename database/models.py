@@ -1,7 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
-from datetime import date
 from sqlalchemy import BigInteger, JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
