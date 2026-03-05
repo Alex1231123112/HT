@@ -48,7 +48,7 @@ async def _get_manager_buttons(user_establishment: str | None) -> list[list[Inli
     if not managers:
         uname = (settings.manager_username or "manager").strip()
         if uname and not uname.startswith("replace-"):
-            return [[InlineKeyboardButton(text="💬 Менеджер", url=f"https://t.me/{uname}")]]
+            return [[InlineKeyboardButton(text="💬 Менеджер", callback_data="manager_default")]]
         return []
 
     establishment_norm = (user_establishment or "").strip().lower()
@@ -70,7 +70,7 @@ async def _get_manager_buttons(user_establishment: str | None) -> list[list[Inli
         label = (matched.full_name or matched.telegram_username or "Менеджер").strip()
         uname = (matched.telegram_username or "").strip().lstrip("@")
         if uname:
-            return [[InlineKeyboardButton(text=f"💬 {label}", url=f"https://t.me/{uname}")]]
+            return [[InlineKeyboardButton(text=f"💬 {label}", callback_data=f"manager_{matched.id}")]]
     rows = []
     for m in managers:
         uname = (m.telegram_username or "").strip().lstrip("@")
@@ -79,7 +79,7 @@ async def _get_manager_buttons(user_establishment: str | None) -> list[list[Inli
         label = m.full_name or m.establishment or m.telegram_username or "Менеджер"
         if m.establishment:
             label = f"{label} ({m.establishment[:30]}{'…' if len(m.establishment) > 30 else ''})"
-        rows.append([InlineKeyboardButton(text=f"💬 {label}", url=f"https://t.me/{uname}")])
+        rows.append([InlineKeyboardButton(text=f"💬 {label}", callback_data=f"manager_{m.id}")])
     return rows if rows else []
 
 

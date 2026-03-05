@@ -1,11 +1,12 @@
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import func, select
 
+from config.settings import get_settings
 from bot.keyboards import events_back_keyboard, menu_keyboard
 from bot.utils import render_content, render_events
-from database.models import Delivery, Event, EventRegistration, News, Promotion, User
+from database.models import Delivery, Event, EventRegistration, Manager, News, Promotion, User
 from database.session import SessionLocal
 
 router = Router()
@@ -81,6 +82,62 @@ async def menu_back(callback: CallbackQuery) -> None:
                 establishment = user.establishment
     kb = await menu_keyboard(with_update_profile=True, user_establishment=establishment)
     await callback.message.answer("📱 <b>Главное меню</b>\n\nВыберите раздел:", reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("manager_"))
+async def manager_contact(callback: CallbackQuery) -> None:
+    """При нажатии на менеджера — выводит сообщение с контактами и кнопкой «Написать»."""
+    data = callback.data
+    if not callback.message:
+        await callback.answer()
+        return
+    settings = get_settings()
+    if data == "manager_default":
+        uname = (settings.manager_username or "manager").strip().lstrip("@")
+        if not uname:
+            await callback.answer("Менеджер не настроен.", show_alert=True)
+            return
+        text = "💬 <b>Связь с менеджером</b>\n\nНажмите кнопку ниже, чтобы написать в Telegram."
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✉️ Написать в Telegram", url=f"https://t.me/{uname}")],
+            ]
+        )
+        await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+        return
+    try:
+        manager_id = int(data.removeprefix("manager_"))
+    except ValueError:
+        await callback.answer()
+        return
+    async with SessionLocal() as session:
+        manager = await session.get(Manager, manager_id)
+        if not manager or not manager.is_active:
+            await callback.answer("Менеджер не найден.", show_alert=True)
+            return
+        uname = (manager.telegram_username or "").strip().lstrip("@")
+        if not uname:
+            await callback.answer("У менеджера не указан Telegram.", show_alert=True)
+            return
+        name = manager.full_name or "Менеджер"
+        phone = manager.phone_number or ""
+        establishment = manager.establishment or ""
+        lines = [f"💬 <b>{name}</b>"]
+        if establishment:
+            lines.append(f"🏢 {establishment}")
+        if phone:
+            lines.append(f"📞 {phone}")
+        lines.append(f"\n@{uname}")
+        lines.append("\nНажмите кнопку ниже, чтобы написать в Telegram.")
+        text = "\n".join(lines)
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✉️ Написать в Telegram", url=f"https://t.me/{uname}")],
+            ]
+        )
+        await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
 
