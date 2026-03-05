@@ -25,6 +25,7 @@ if [ "$1" = "--no-cache" ]; then
 else
   $COMPOSE build
 fi
+$COMPOSE down 2>/dev/null || true
 $COMPOSE up -d
 sleep 5
 $COMPOSE exec -T api alembic upgrade head
