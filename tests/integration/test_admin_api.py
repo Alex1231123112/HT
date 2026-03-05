@@ -4,6 +4,7 @@
 Запуск: pytest tests/integration/test_admin_api.py -v
        pytest -m integration  (все интеграционные)
 """
+import random
 import time
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -75,8 +76,7 @@ def test_users_list(api_client):
 def test_users_create_get_update_delete(api_client):
     client = api_client
     headers = _login(client)
-    # id должен помещаться в 32-bit int (БД/Telegram)
-    uid = (int(time.time()) % 900000000) + 100000000
+    uid = _unique_user_id()
 
     create = client.post(
         "/api/users",
@@ -142,11 +142,16 @@ def test_users_stats_and_export(api_client):
     assert "id," in export.text or "id;" in export.text
 
 
+def _unique_user_id() -> int:
+    """Уникальный id пользователя (32-bit, для Telegram). Избегает коллизий при параллельном запуске тестов."""
+    return random.randint(100000000, 999999999)
+
+
 def test_users_bulk_restore(api_client):
     client = api_client
     headers = _login(client)
-    uid = (int(time.time()) % 900000000) + 100000000
-    client.post(
+    uid = _unique_user_id()
+    create_resp = client.post(
         "/api/users",
         headers=headers,
         json={
@@ -157,6 +162,7 @@ def test_users_bulk_restore(api_client):
             "is_active": True,
         },
     )
+    assert create_resp.status_code == 200, create_resp.text
     client.delete(f"/api/users/{uid}", headers=headers)
     r = client.post(
         "/api/users/bulk",
