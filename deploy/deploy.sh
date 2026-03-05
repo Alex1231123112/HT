@@ -18,7 +18,13 @@ if [ -f docker-compose.prod.yml ]; then
 else
   COMPOSE="docker compose"
 fi
-$COMPOSE build --no-cache
+# BuildKit + кэш: npm/pip кэшируются между сборками
+export DOCKER_BUILDKIT=1
+if [ "$1" = "--no-cache" ]; then
+  $COMPOSE build --no-cache
+else
+  $COMPOSE build
+fi
 $COMPOSE up -d
 sleep 5
 $COMPOSE exec -T api alembic upgrade head
