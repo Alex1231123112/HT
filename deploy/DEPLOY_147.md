@@ -170,6 +170,21 @@ docker compose exec api alembic upgrade head
 docker compose exec db pg_dump -U postgres botdb > backup_$(date +%Y%m%d).sql
 ```
 
+## Загрузка файлов и рассылка
+
+**Медиа (картинки, видео):** Файлы сохраняются в MinIO (S3). В `.env` обязательно задайте публичные URL:
+```
+S3_PUBLIC_BASE_URL=http://147.45.96.211:9000/uploads
+UPLOAD_PUBLIC_BASE_URL=http://147.45.96.211:9000/uploads
+```
+Иначе Telegram не сможет скачать медиа при рассылке. Порт 9000 должен быть открыт в файрволе.
+
+**Контент-план:**
+- **По расписанию:** API каждые 10 сек проверяет планы со статусом `scheduled` и `scheduled_at <= now`, отправляет в бот и каналы.
+- **Ручная отправка:** В админке → Контент-план → кнопка «Отправить» у записи (POST `/api/content-plan/{id}/send`).
+
+Для рассылки нужен `BOT_TOKEN` в `.env`.
+
 ## Проверка после деплоя
 
 - `curl http://147.45.96.211:8000/health` → `{"message":"ok"}`

@@ -12,11 +12,12 @@ services:
   api:
     environment:
       APP_ENV: prod
-      # Set ALLOWED_ORIGINS in .env for your domain, e.g. ALLOWED_ORIGINS=http://147.45.96.211
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://147.45.96.211}
+      S3_PUBLIC_BASE_URL: http://147.45.96.211:9000/uploads
     # В prod можно убрать volume с исходниками — использовать только образ
     # volumes: []
 
   bot:
     environment:
       APP_ENV: prod
+      UPLOAD_PUBLIC_BASE_URL: http://147.45.96.211:9000/uploads

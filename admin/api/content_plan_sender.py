@@ -7,8 +7,11 @@ import logging
 import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+
+from config.settings import get_settings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,6 +123,32 @@ def _build_text(title: str, description: str) -> str:
     return f"<b>{title}</b>\n\n{description}"[:4096]
 
 
+def _ensure_public_media_url(url: str | None) -> str | None:
+    """
+    Подменяет localhost/127.0.0.1 в URL медиа на публичный base, чтобы Telegram мог скачать файл.
+    В проде API и бот в Docker — Telegram не может обратиться к localhost.
+    """
+    if not url or not url.strip():
+        return None
+    u = url.strip()
+    if "localhost" not in u and "127.0.0.1" not in u:
+        return u
+    st = get_settings()
+    base = None
+    if st.use_s3 and st.s3_public_base_url:
+        base = st.s3_public_base_url.rstrip("/")
+    elif st.upload_public_base_url:
+        base = st.upload_public_base_url.rstrip("/")
+    if not base:
+        return u
+    try:
+        parsed = urlparse(u)
+        path = parsed.path or "/"
+        return f"{base}{path}"
+    except Exception:
+        return u
+
+
 def _normalize_channel_ref(ref: str) -> str:
     """Из ссылки t.me/username или telegram.me/username извлекает @username. Иначе возвращает ref как есть."""
     ref = (ref or "").strip()
@@ -149,6 +178,7 @@ async def _send_one_message(
 ) -> tuple[int, int, list[str]]:
     """Отправить одно сообщение (title, description, media) во все каналы из rows. Возвращает (sent_bot, sent_channel, errors)."""
     text = _build_text(title, description)
+    media_url_public = _ensure_public_media_url(media_url)
     sent_bot = 0
     sent_channel = 0
     errors: list[str] = []
@@ -170,9 +200,9 @@ async def _send_one_message(
         if ch.channel_type == DistributionChannelType.BOT:
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
             for uid in users:
-                if media_url:
+                if media_url_public:
                     result, err_msg = await tg.send_photo(
-                        bot_token, uid, media_url, caption=text, client=telegram_client
+                        bot_token, uid, media_url_public, caption=text, client=telegram_client
                     )
                 else:
                     result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
@@ -185,8 +215,8 @@ async def _send_one_message(
                     _log("bot", target, False, err_msg)
         elif ch.channel_type == DistributionChannelType.TELEGRAM_CHANNEL and ch.telegram_ref:
             chat = _normalize_channel_ref(ch.telegram_ref)
-            if media_url:
-                result, err_msg = await tg.send_photo(bot_token, chat, media_url, caption=text, client=telegram_client)
+            if media_url_public:
+                result, err_msg = await tg.send_photo(bot_token, chat, media_url_public, caption=text, client=telegram_client)
             else:
                 result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
             target = chat
