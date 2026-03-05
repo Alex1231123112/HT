@@ -56,8 +56,14 @@ async def _get_manager_buttons(user_establishment: str | None) -> list[list[Inli
     if establishment_norm:
         for m in managers:
             names = [e.strip().lower() for e in (m.establishment or "").split(",") if e.strip()]
-            if establishment_norm in names:
-                matched = m
+            # Точное совпадение или вхождение (напр. "Кальянная" в "Кальянная Lounge")
+            for n in names:
+                if establishment_norm == n or (
+                    len(establishment_norm) >= 3 and establishment_norm in n
+                ):
+                    matched = m
+                    break
+            if matched:
                 break
 
     if matched:
