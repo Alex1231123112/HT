@@ -85,26 +85,105 @@ async def menu_back(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("manager_"))
-async def manager_contact(callback: CallbackQuery) -> None:
-    """При нажатии на менеджера — выводит сообщение с контактами и кнопкой «Написать»."""
-    data = callback.data
+async def _get_managers_for_user(user_establishment: str | None) -> list:
+    """Менеджеры для показа: один (привязан к заведению) или все из админки."""
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Manager).where(
+                Manager.is_active.is_(True), Manager.telegram_username.isnot(None)
+            )
+        )
+        managers = list(result.scalars().all())
+    if not managers:
+        return []
+    establishment_norm = (user_establishment or "").strip().lower()
+    if establishment_norm:
+        for m in managers:
+            names = [e.strip().lower() for e in (m.establishment or "").split(",") if e.strip()]
+            for n in names:
+                if establishment_norm == n or (
+                    len(establishment_norm) >= 3 and establishment_norm in n
+                ):
+                    return [m]
+    return managers
+
+
+@router.callback_query(F.data == "menu_manager")
+async def menu_manager(callback: CallbackQuery) -> None:
+    """При нажатии «Менеджер» — показать список (один или все менеджеры)."""
     if not callback.message:
         await callback.answer()
         return
+    user_establishment = None
+    if callback.from_user:
+        async with SessionLocal() as session:
+            user = await session.get(User, callback.from_user.id)
+            if user:
+                user_establishment = user.establishment
+    managers = await _get_managers_for_user(user_establishment)
     settings = get_settings()
-    if data == "manager_default":
+    if not managers:
         uname = (settings.manager_username or "manager").strip().lstrip("@")
-        if not uname:
+        if uname:
+            text = "💬 <b>Связь с менеджером</b>\n\nНажмите кнопку ниже, чтобы написать в Telegram."
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="✉️ Написать в Telegram", url=f"https://t.me/{uname}")],
+                ]
+            )
+            await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
             await callback.answer("Менеджер не настроен.", show_alert=True)
+        await callback.answer()
+        return
+    if len(managers) == 1:
+        m = managers[0]
+        uname = (m.telegram_username or "").strip().lstrip("@")
+        if not uname:
+            await callback.answer("У менеджера не указан Telegram.", show_alert=True)
             return
-        text = "💬 <b>Связь с менеджером</b>\n\nНажмите кнопку ниже, чтобы написать в Telegram."
+        name = m.full_name or "Менеджер"
+        phone = m.phone_number or ""
+        establishment = m.establishment or ""
+        lines = [f"💬 <b>{name}</b>"]
+        if establishment:
+            lines.append(f"🏢 {establishment}")
+        if phone:
+            lines.append(f"📞 {phone}")
+        lines.append(f"\n@{uname}")
+        lines.append("\nНажмите кнопку ниже, чтобы написать в Telegram.")
+        text = "\n".join(lines)
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="✉️ Написать в Telegram", url=f"https://t.me/{uname}")],
             ]
         )
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        text = "💬 <b>Связь с менеджерами</b>\n\nВыберите менеджера:"
+        rows = []
+        for m in managers:
+            uname = (m.telegram_username or "").strip().lstrip("@")
+            if not uname:
+                continue
+            label = m.full_name or m.establishment or m.telegram_username or "Менеджер"
+            if m.establishment:
+                label = f"{label} ({m.establishment[:25]}{'…' if len(m.establishment or '') > 25 else ''})"
+            rows.append([InlineKeyboardButton(text=f"💬 {label}", callback_data=f"manager_{m.id}")])
+        if rows:
+            kb = InlineKeyboardMarkup(inline_keyboard=rows)
+            await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
+            await callback.answer("Нет доступных менеджеров.", show_alert=True)
+            return
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("manager_"))
+async def manager_contact(callback: CallbackQuery) -> None:
+    """При нажатии на менеджера из списка — выводит карточку с контактами."""
+    data = callback.data
+    if not callback.message:
         await callback.answer()
         return
     try:

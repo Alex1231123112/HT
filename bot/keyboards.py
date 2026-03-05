@@ -35,10 +35,9 @@ def type_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-async def _get_manager_buttons(user_establishment: str | None) -> list[list[InlineKeyboardButton]]:
+async def _get_manager_button(user_establishment: str | None) -> list[list[InlineKeyboardButton]]:
     """
-    Если есть менеджер, привязанный к заведению пользователя — одна кнопка с его ссылкой.
-    Иначе — список всех активных менеджеров с Telegram.
+    Всегда одна кнопка «Менеджер». При нажатии показывается список (один или все менеджеры).
     """
     async with SessionLocal() as session:
         result = await session.execute(
@@ -48,46 +47,16 @@ async def _get_manager_buttons(user_establishment: str | None) -> list[list[Inli
     if not managers:
         uname = (settings.manager_username or "manager").strip()
         if uname and not uname.startswith("replace-"):
-            return [[InlineKeyboardButton(text="💬 Менеджер", callback_data="manager_default")]]
+            return [[InlineKeyboardButton(text="💬 Менеджер", callback_data="menu_manager")]]
         return []
-
-    establishment_norm = (user_establishment or "").strip().lower()
-    matched = None
-    if establishment_norm:
-        for m in managers:
-            names = [e.strip().lower() for e in (m.establishment or "").split(",") if e.strip()]
-            # Точное совпадение или вхождение (напр. "Кальянная" в "Кальянная Lounge")
-            for n in names:
-                if establishment_norm == n or (
-                    len(establishment_norm) >= 3 and establishment_norm in n
-                ):
-                    matched = m
-                    break
-            if matched:
-                break
-
-    if matched:
-        label = (matched.full_name or matched.telegram_username or "Менеджер").strip()
-        uname = (matched.telegram_username or "").strip().lstrip("@")
-        if uname:
-            return [[InlineKeyboardButton(text=f"💬 {label}", callback_data=f"manager_{matched.id}")]]
-    rows = []
-    for m in managers:
-        uname = (m.telegram_username or "").strip().lstrip("@")
-        if not uname:
-            continue
-        label = m.full_name or m.establishment or m.telegram_username or "Менеджер"
-        if m.establishment:
-            label = f"{label} ({m.establishment[:30]}{'…' if len(m.establishment) > 30 else ''})"
-        rows.append([InlineKeyboardButton(text=f"💬 {label}", callback_data=f"manager_{m.id}")])
-    return rows if rows else []
+    return [[InlineKeyboardButton(text="💬 Менеджер", callback_data="menu_manager")]]
 
 
 async def menu_keyboard(
     with_update_profile: bool = False,
     user_establishment: str | None = None,
 ) -> InlineKeyboardMarkup:
-    manager_rows = await _get_manager_buttons(user_establishment)
+    manager_rows = await _get_manager_button(user_establishment)
     rows = [
         [
             InlineKeyboardButton(text="🎁 Акции", callback_data="menu_promotions"),
