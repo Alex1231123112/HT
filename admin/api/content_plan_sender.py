@@ -10,12 +10,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
-
-from config.settings import get_settings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api import telegram_sender as tg
+from config.settings import get_settings
 from database.models import (
     ContentPlan,
     ContentPlanChannel,
