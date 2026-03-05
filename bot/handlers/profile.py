@@ -14,7 +14,9 @@ from bot.keyboards import (
     remove_keyboard,
     request_phone_keyboard,
 )
-from database.models import User, UserType
+from sqlalchemy import select
+
+from database.models import Establishment, User, UserType
 from database.session import SessionLocal
 
 router = Router()
@@ -158,6 +160,12 @@ async def save_establishment(message: Message, state: FSMContext) -> None:
         async with SessionLocal() as session:
             user = await session.get(User, message.from_user.id)
             if user:
+                # Создать заведение в справочнике, если его ещё нет
+                existing = await session.scalar(
+                    select(Establishment).where(Establishment.name == val)
+                )
+                if not existing:
+                    session.add(Establishment(name=val, user_type=user.user_type))
                 user.establishment = val
                 user.last_activity = datetime.utcnow()
                 user.deleted_at = None

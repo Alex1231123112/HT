@@ -8,10 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from admin.api.deps import get_current_admin, require_roles, verify_csrf
 from admin.api.schemas import GenericMessage, UserCreate, UserOut, UserStatsOut, UserUpdate
 from admin.api.services import users_csv
-from database.models import ActivityLog, AdminUser, User, UserType
+from database.models import ActivityLog, AdminUser, Establishment, User, UserType
 from database.session import get_db
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+async def _ensure_establishment(db: AsyncSession, name: str, user_type: UserType) -> None:
+    """Создать заведение в справочнике, если его ещё нет."""
+    name = (name or "").strip()
+    if not name:
+        return
+    existing = await db.scalar(select(Establishment).where(Establishment.name == name))
+    if not existing:
+        db.add(Establishment(name=name, user_type=user_type))
 
 
 @router.post("", response_model=UserOut, dependencies=[Depends(verify_csrf)])
@@ -20,6 +30,7 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(require_roles("superadmin", "admin")),
 ) -> UserOut:
+    await _ensure_establishment(db, payload.establishment, payload.user_type)
     user = User(**payload.model_dump())
     db.add(user)
     db.add(ActivityLog(admin_id=admin.id, action="create_user", details=f"user={user.id}"))
@@ -132,7 +143,11 @@ async def update_user(
     user = await db.get(User, user_id)
     if not user or user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="User not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "establishment" in data and data["establishment"]:
+        ut = data.get("user_type", user.user_type)
+        await _ensure_establishment(db, data["establishment"], ut)
+    for key, value in data.items():
         setattr(user, key, value)
     db.add(user)
     db.add(ActivityLog(admin_id=admin.id, action="update_user", details=f"user={user_id}"))

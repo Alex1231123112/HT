@@ -16,8 +16,10 @@ from bot.keyboards import (
     request_phone_keyboard,
     type_keyboard,
 )
+from sqlalchemy import select
+
 from config.settings import get_settings
-from database.models import User, UserType
+from database.models import Establishment, User, UserType
 from database.session import SessionLocal
 
 router = Router()
@@ -218,6 +220,14 @@ async def save_position_and_finish(message: Message, state: FSMContext) -> None:
 
     try:
         async with SessionLocal() as session:
+            # Создать заведение в справочнике, если его ещё нет
+            est_name = (establishment or "").strip()
+            if est_name:
+                existing = await session.scalar(
+                    select(Establishment).where(Establishment.name == est_name)
+                )
+                if not existing:
+                    session.add(Establishment(name=est_name, user_type=user_type))
             user = await session.get(User, message.from_user.id)
             if user is None:
                 user = User(
