@@ -3,9 +3,9 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import func, select
 
-from config.settings import get_settings
 from bot.keyboards import events_back_keyboard, menu_keyboard
 from bot.utils import render_content, render_events
+from config.settings import get_settings
 from database.models import Delivery, Event, EventRegistration, Manager, News, Promotion, User
 from database.session import SessionLocal
 
