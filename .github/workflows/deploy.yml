@@ -18,17 +18,12 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
-      - name: Setup SSH key
-        run: |
-          printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key
-          sed -i 's/\r$//' deploy_key
-          chmod 600 deploy_key
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key_path: ${{ github.workspace }}/deploy_key
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           debug: true
           command_timeout: 90m
