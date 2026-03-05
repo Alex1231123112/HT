@@ -1,6 +1,8 @@
 name: CD
 
 on:
+  push:
+    branches: [main]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -10,17 +12,30 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    # При push в main — всегда деплоим. При workflow_run — только если CI успешен.
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
+      - name: Setup SSH key
+        run: |
+          printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key
+          sed -i 's/\r$//' deploy_key
+          chmod 600 deploy_key
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key_path: ${{ github.workspace }}/deploy_key
+          script_stop: true
+          debug: true
+          command_timeout: 90m
           script: |
-            cd /opt/ht
-            git fetch origin
+            echo "=== SSH connected ==="
+            cd /opt/ht || { echo "ERROR: cd /opt/ht failed"; exit 1; }
+            git fetch origin || { echo "ERROR: git fetch failed"; exit 1; }
             git reset --hard origin/main
             chmod +x deploy/deploy.sh
             ./deploy/deploy.sh
