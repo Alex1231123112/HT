@@ -6,6 +6,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from bot.keyboards import (
@@ -14,8 +15,6 @@ from bot.keyboards import (
     remove_keyboard,
     request_phone_keyboard,
 )
-from sqlalchemy import select
-
 from database.models import Establishment, User, UserType
 from database.session import SessionLocal
 
