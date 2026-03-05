@@ -148,6 +148,12 @@ def _ensure_public_media_url(url: str | None) -> str | None:
         return u
 
 
+def _is_video_url(url: str) -> bool:
+    """Проверка: URL указывает на видео (sendPhoto не подходит, нужен sendVideo)."""
+    lower = (url or "").lower()
+    return any(lower.endswith(ext) for ext in (".mp4", ".webm", ".mov"))
+
+
 def _normalize_channel_ref(ref: str) -> str:
     """Из ссылки t.me/username или telegram.me/username извлекает @username. Иначе возвращает ref как есть."""
     ref = (ref or "").strip()
@@ -200,9 +206,14 @@ async def _send_one_message(
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
             for uid in users:
                 if media_url_public:
-                    result, err_msg = await tg.send_photo(
-                        bot_token, uid, media_url_public, caption=text, client=telegram_client
-                    )
+                    if _is_video_url(media_url_public):
+                        result, err_msg = await tg.send_video(
+                            bot_token, uid, media_url_public, caption=text, client=telegram_client
+                        )
+                    else:
+                        result, err_msg = await tg.send_photo(
+                            bot_token, uid, media_url_public, caption=text, client=telegram_client
+                        )
                 else:
                     result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
                 target = f"user:{uid}"
@@ -215,7 +226,14 @@ async def _send_one_message(
         elif ch.channel_type == DistributionChannelType.TELEGRAM_CHANNEL and ch.telegram_ref:
             chat = _normalize_channel_ref(ch.telegram_ref)
             if media_url_public:
-                result, err_msg = await tg.send_photo(bot_token, chat, media_url_public, caption=text, client=telegram_client)
+                if _is_video_url(media_url_public):
+                    result, err_msg = await tg.send_video(
+                        bot_token, chat, media_url_public, caption=text, client=telegram_client
+                    )
+                else:
+                    result, err_msg = await tg.send_photo(
+                        bot_token, chat, media_url_public, caption=text, client=telegram_client
+                    )
             else:
                 result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
             target = chat

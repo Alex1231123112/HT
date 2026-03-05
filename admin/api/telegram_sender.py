@@ -52,6 +52,27 @@ async def send_photo(
     return await _post(client, url, payload)
 
 
+async def send_video(
+    bot_token: str,
+    chat_id: str | int,
+    video_url: str,
+    caption: str | None = None,
+    parse_mode: str = PARSE_MODE_HTML,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Отправить видео по URL в чат/канал. Возвращает (response_data, None) при успехе или (None, error_message)."""
+    url = f"{TELEGRAM_API}/bot{bot_token}/sendVideo"
+    payload: dict[str, Any] = {"chat_id": chat_id, "video": video_url}
+    if caption:
+        payload["caption"] = caption[:1024]
+        payload["parse_mode"] = parse_mode
+    if client is None:
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            return await _post(c, url, payload)
+    return await _post(client, url, payload)
+
+
 def _error_description(data: dict[str, Any]) -> str:
     """Текст ошибки из ответа Telegram API для показа пользователю."""
     desc = data.get("description") or data.get("error") or ""

@@ -3,6 +3,9 @@ import { Create, DeleteButton, Edit, EditButton, List, useForm, useTable } from 
 import { Button, Card, DatePicker, Form, Input, message, Select, Space, Table } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 import { CustomContentBlock } from "../components/PublicationEditor";
 
 type ContentPlanItemRecord = {
@@ -125,7 +128,7 @@ export function ContentPlanList() {
         <Table.Column<ContentPlanRecord>
           dataIndex="scheduled_at"
           title="Запланировано"
-          render={(v) => (v ? dayjs(v).format("DD.MM.YYYY HH:mm") : "—")}
+          render={(v) => (v ? dayjs.utc(v).local().format("DD.MM.YYYY HH:mm") : "—")}
           width={140}
         />
         <Table.Column<ContentPlanRecord>
@@ -337,7 +340,7 @@ function ContentPlanForm({ isEdit = false }: { isEdit?: boolean }) {
       <Form.Item
         label="Дата и время отправки"
         name="scheduled_at"
-        getValueProps={(v: string | null) => ({ value: v ? dayjs(v) : null })}
+        getValueProps={(v: string | null) => ({ value: v ? dayjs.utc(v).local() : null })}
         normalize={(v: Dayjs | null) => (v ? v.toISOString() : null)}
         extra="Для автоматической отправки по времени выберите статус «Запланировано» и сохраните план — воркер отправит в указанное время."
       >
