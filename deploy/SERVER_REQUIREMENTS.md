@@ -83,6 +83,24 @@
 
 ---
 
+## Деплой через GitHub Actions (CD)
+
+Чтобы CD по push в `main` подключался по SSH к серверу, **порт 22 должен быть доступен** с IP GitHub Actions (или с интернета, если используется только ключ).
+
+На сервере один раз выполните:
+
+```bash
+sudo ./deploy/firewall-github-actions.sh
+```
+
+Скрипт добавит в UFW правила для IP-диапазонов GitHub Actions. Если используете не UFW (например, iptables или файрвол облака), откройте порт 22 для входящих с [GitHub meta API](https://api.github.com/meta) → `actions`.
+
+В репозитории заданы секреты: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`.
+
+Если видите ошибку `dial tcp ...:22: i/o timeout` — runner не достучивается до сервера: проверьте файрвол, что SSH слушает на 22 и хост доступен из интернета.
+
+---
+
 ## Мониторинг
 
 ```bash

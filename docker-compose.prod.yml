@@ -20,4 +20,5 @@ services:
   bot:
     environment:
       APP_ENV: prod
-      UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-http://147.45.96.211:9000/uploads}
+      # Медиа берём с API (порт 8000), не с MinIO
+      UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-http://147.45.96.211:8000}
