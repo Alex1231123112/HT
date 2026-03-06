@@ -2,6 +2,7 @@
 Отправка записей контент-плана в бот и каналы Telegram.
 Используется воркером по расписанию и может вызываться из тестов с mock telegram_sender.
 """
+import asyncio
 import html
 import logging
 import re
@@ -169,7 +170,6 @@ async def _fetch_media_bytes(url: str) -> tuple[bytes | None, str, str]:
     # Наш S3: используем boto3 (работает даже с приватным bucket)
     if st.use_s3 and st.s3_public_base_url and url.startswith(st.s3_public_base_url.rstrip("/")):
         try:
-            import asyncio
             import boto3
             from botocore.config import Config
 
