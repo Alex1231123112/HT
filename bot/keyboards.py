@@ -1,9 +1,6 @@
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from sqlalchemy import select
 
 from config.settings import get_settings
-from database.models import Manager
-from database.session import SessionLocal
 
 settings = get_settings()
 

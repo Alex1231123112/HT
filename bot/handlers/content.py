@@ -6,9 +6,9 @@ from sqlalchemy import func, select
 from bot.keyboards import (
     BTN_DELIVERIES,
     BTN_EVENTS,
+    BTN_MANAGER,
     BTN_MENU,
     BTN_NEWS,
-    BTN_PROFILE,
     BTN_PROMOTIONS,
     BTN_UPDATE_PROFILE,
     events_back_keyboard,
