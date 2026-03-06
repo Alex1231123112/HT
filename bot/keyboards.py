@@ -1,10 +1,4 @@
-from aiogram.types import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
-)
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 
 from config.settings import get_settings
@@ -12,18 +6,6 @@ from database.models import Manager
 from database.session import SessionLocal
 
 settings = get_settings()
-
-
-def request_phone_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📱 Отправить номер телефона", request_contact=True)]],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-    )
-
-
-def remove_keyboard() -> ReplyKeyboardRemove:
-    return ReplyKeyboardRemove(remove_keyboard=True)
 
 
 def type_keyboard() -> InlineKeyboardMarkup:

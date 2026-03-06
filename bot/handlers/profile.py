@@ -9,12 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from bot.keyboards import (
-    edit_profile_keyboard,
-    profile_keyboard,
-    remove_keyboard,
-    request_phone_keyboard,
-)
+from bot.keyboards import edit_profile_keyboard, profile_keyboard
 from database.models import Establishment, User, UserType
 from database.session import SessionLocal
 
@@ -129,7 +124,7 @@ async def edit_position_start(callback: CallbackQuery, state: FSMContext) -> Non
 @router.callback_query(F.data == "edit_phone")
 async def edit_phone_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ProfileEdit.editing_phone)
-    await callback.message.answer("Нажмите кнопку для отправки номера телефона:", reply_markup=request_phone_keyboard())
+    await callback.message.answer("Напишите новый номер телефона в чат (например +7 999 123-45-67):")
     await callback.answer()
 
 
@@ -247,11 +242,24 @@ async def save_position(message: Message, state: FSMContext) -> None:
     await _save_and_show_profile(message, state)
 
 
+def _parse_phone_from_text(text: str | None) -> str | None:
+    if not text or not text.strip():
+        return None
+    digits = "".join(c for c in text.strip() if c.isdigit())
+    if len(digits) < 10:
+        return None
+    if len(digits) == 10 and digits[0] in "789":
+        return "+7" + digits
+    if len(digits) == 11 and digits[0] in "78":
+        return "+7" + digits[1:]
+    return "+" + digits[-10:]
+
+
 @router.message(ProfileEdit.editing_phone, F.contact)
-async def save_phone(message: Message, state: FSMContext) -> None:
-    phone = (message.contact.phone_number or "").strip() if message.contact else ""
+async def save_phone_contact(message: Message, state: FSMContext) -> None:
+    phone = _parse_phone_from_text(message.contact.phone_number if message.contact else None)
     if not phone:
-        await message.answer("Не удалось получить номер. Нажмите кнопку «Отправить номер телефона».", reply_markup=request_phone_keyboard())
+        await message.answer("Не удалось получить номер. Напишите номер в чат (например +7 999 123-45-67).")
         return
     try:
         async with SessionLocal() as session:
@@ -267,10 +275,34 @@ async def save_phone(message: Message, state: FSMContext) -> None:
         await message.answer("Не удалось сохранить. Попробуйте позже.")
         await state.clear()
         return
-    await message.answer("Номер обновлён.", reply_markup=remove_keyboard())
+    await message.answer("Номер обновлён.")
+    await _save_and_show_profile(message, state)
+
+
+@router.message(ProfileEdit.editing_phone, F.text)
+async def save_phone_text(message: Message, state: FSMContext) -> None:
+    phone = _parse_phone_from_text(message.text)
+    if not phone:
+        await message.answer("Неверный формат. Напишите номер, например +7 999 123-45-67.")
+        return
+    try:
+        async with SessionLocal() as session:
+            user = await session.get(User, message.from_user.id)
+            if user:
+                user.phone_number = phone
+                user.last_activity = datetime.utcnow()
+                user.deleted_at = None
+                session.add(user)
+                await session.commit()
+    except SQLAlchemyError:
+        logger.exception("Database error updating phone")
+        await message.answer("Не удалось сохранить. Попробуйте позже.")
+        await state.clear()
+        return
+    await message.answer("Номер обновлён.")
     await _save_and_show_profile(message, state)
 
 
 @router.message(ProfileEdit.editing_phone)
-async def editing_phone_not_contact(message: Message) -> None:
-    await message.answer("Пожалуйста, нажмите кнопку «📱 Отправить номер телефона».", reply_markup=request_phone_keyboard())
+async def editing_phone_other(message: Message) -> None:
+    await message.answer("Напишите номер телефона в чат (например +7 999 123-45-67).")

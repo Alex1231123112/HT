@@ -10,13 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from bot.keyboards import (
-    birth_date_retry_keyboard,
-    menu_keyboard,
-    remove_keyboard,
-    request_phone_keyboard,
-    type_keyboard,
-)
+from bot.keyboards import birth_date_retry_keyboard, menu_keyboard, type_keyboard
 from config.settings import get_settings
 from database.models import Establishment, User, UserType
 from database.session import SessionLocal
@@ -62,6 +56,22 @@ def _format_phone(phone: str | None) -> str:
     return phone.replace("+", "").replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
 
 
+def _parse_phone_from_text(text: str | None) -> str | None:
+    """Из текста извлечь номер (только цифры, минимум 10). Возвращает нормализованную строку с + в начале или None."""
+    if not text or not text.strip():
+        return None
+    digits = "".join(c for c in text.strip() if c.isdigit())
+    if text.strip().startswith("+"):
+        digits = digits.lstrip("7").lstrip("8") or digits  # +7/8 в начале не считаем лишними
+    if len(digits) < 10:
+        return None
+    if len(digits) == 10 and digits[0] in "789":
+        return "+7" + digits
+    if len(digits) == 11 and digits[0] in "78":
+        return "+7" + digits[1:]
+    return "+" + digits[-10:] if len(digits) >= 10 else None
+
+
 @router.message(CommandStart())
 async def start(message: Message, state: FSMContext) -> None:
     try:
@@ -88,9 +98,7 @@ async def start(message: Message, state: FSMContext) -> None:
         "• Информация о приходах\n"
         "• Связь с менеджерами\n"
         "• Информация о мероприятиях\n\n"
-        "Для продолжения регистрации нам нужен ваш номер телефона.\n"
-        "Нажмите кнопку ниже",
-        reply_markup=request_phone_keyboard(),
+        "Для продолжения напишите номер телефона в чат (например +7 999 123-45-67):",
         parse_mode="HTML",
     )
 
@@ -99,31 +107,36 @@ async def start(message: Message, state: FSMContext) -> None:
 async def start_reregister(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(Registration.waiting_phone)
     await callback.message.answer(
-        "Обновление профиля. Для продолжения нужен ваш номер телефона.\nНажмите кнопку ниже.",
-        reply_markup=request_phone_keyboard(),
+        "Обновление профиля. Напишите номер телефона в чат (например +7 999 123-45-67):",
     )
     await callback.answer()
 
 
 @router.message(Registration.waiting_phone, F.contact)
-async def receive_phone(message: Message, state: FSMContext) -> None:
-    contact = message.contact
-    phone = (contact.phone_number or "").strip()
+async def receive_phone_contact(message: Message, state: FSMContext) -> None:
+    phone = _parse_phone_from_text(message.contact.phone_number if message.contact else None)
     if not phone:
-        await message.answer("Не удалось получить номер. Нажмите кнопку «Отправить номер телефона».", reply_markup=request_phone_keyboard())
+        await message.answer("Не удалось получить номер. Напишите номер в чат (например +7 999 123-45-67).")
         return
     await state.update_data(phone_number=phone)
     await state.set_state(Registration.choosing_type)
-    await message.answer(
-        f"✅ Номер получен!\n{phone}\n\nТеперь выберите ваше направление:",
-        reply_markup=remove_keyboard(),
-    )
-    await message.answer("Выберите ваше направление:", reply_markup=type_keyboard())
+    await message.answer(f"✅ Номер получен!\n{phone}\n\nВыберите ваше направление:", reply_markup=type_keyboard())
+
+
+@router.message(Registration.waiting_phone, F.text)
+async def receive_phone_text(message: Message, state: FSMContext) -> None:
+    phone = _parse_phone_from_text(message.text)
+    if not phone:
+        await message.answer("Неверный формат. Напишите номер, например +7 999 123-45-67 или 89991234567.")
+        return
+    await state.update_data(phone_number=phone)
+    await state.set_state(Registration.choosing_type)
+    await message.answer(f"✅ Номер получен!\n{phone}\n\nВыберите ваше направление:", reply_markup=type_keyboard())
 
 
 @router.message(Registration.waiting_phone)
-async def waiting_phone_not_contact(message: Message) -> None:
-    await message.answer("Пожалуйста, нажмите кнопку «📱 Отправить номер телефона» для продолжения.", reply_markup=request_phone_keyboard())
+async def waiting_phone_other(message: Message) -> None:
+    await message.answer("Напишите номер телефона в чат (например +7 999 123-45-67).")
 
 
 @router.callback_query(Registration.choosing_type, F.data.startswith("type_"))

@@ -173,6 +173,26 @@ def _is_video_url(url: str) -> bool:
     return any(lower.endswith(ext) for ext in (".mp4", ".webm", ".mov"))
 
 
+def _is_image_url(url: str) -> bool:
+    """Форматы, которые отправляем как фото."""
+    lower = (url or "").lower()
+    return any(lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"))
+
+
+def _media_kind(url: str, content_type: str = "") -> str:
+    """'video' | 'photo' | 'document' — как отправлять файл в контент-плане."""
+    if _is_video_url(url):
+        return "video"
+    if _is_image_url(url):
+        return "photo"
+    ct = (content_type or "").lower()
+    if ct.startswith("video/"):
+        return "video"
+    if ct.startswith("image/"):
+        return "photo"
+    return "document"
+
+
 async def _fetch_media_bytes(url: str) -> tuple[bytes | None, str, str]:
     """
     Скачать медиа по URL. Возвращает (bytes, filename, content_type) или (None, "", "").
@@ -261,21 +281,19 @@ async def _send_one_message(
     """Отправить одно сообщение (title, description, media) во все каналы из rows. Возвращает (sent_bot, sent_channel, errors)."""
     text = _build_text(title, description)
     media_url_public = _ensure_public_media_url(media_url)
+    kind = _media_kind(media_url or media_url_public or "", "")
     if media_url_public:
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 r = await client.head(media_url_public)
                 ct = (r.headers.get("content-type") or "").lower()
-                if r.status_code == 404:
-                    logger.warning("Media 404, sending text only: %s", media_url_public[:100])
-                    media_url_public = None
-                elif r.status_code != 200:
-                    logger.warning("Media pre-check status=%s, trying send anyway: %s", r.status_code, media_url_public[:80])
+                if r.status_code != 200:
+                    logger.warning("Media pre-check status=%s, will try send anyway: %s", r.status_code, media_url_public[:80])
                 elif "text/html" in ct:
                     logger.warning("Media URL returns HTML (likely error page), sending text only: %s", media_url_public[:80])
                     media_url_public = None
         except Exception as e:
-            logger.warning("Media pre-check failed (trying send anyway): %s url=%s", e, media_url_public[:80])
+            logger.warning("Media pre-check failed (will try send anyway): %s url=%s", e, media_url_public[:80])
     sent_bot = 0
     sent_channel = 0
     errors: list[str] = []
@@ -299,32 +317,39 @@ async def _send_one_message(
             or "type of file mismatch" in err.lower()
         )
 
-    async def _send_media(chat_id: str | int, is_video: bool) -> tuple[bool, str | None]:
-        """Отправить медиа: сначала по URL, при ошибке — скачать и отправить файлом."""
+    async def _send_media(chat_id: str | int) -> tuple[bool, str | None]:
+        """Отправить медиа: сначала по URL, при ошибке — скачать и отправить файлом (video/photo/document)."""
         if not media_url_public:
             return False, None
-        if is_video:
+        if kind == "video":
             result, err = await tg.send_video(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
-        else:
+        elif kind == "photo":
             result, err = await tg.send_photo(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+        else:
+            result, err = await tg.send_document(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
         if result:
             return True, None
-        if _is_wrong_type_error(err) and not is_video:
+        if _is_wrong_type_error(err) and kind == "photo":
             result, err = await tg.send_video(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
             if result:
                 return True, None
-        # Fallback: скачать и отправить файлом (работает с приватным S3)
+        # Fallback: скачать и отправить файлом (работает с приватным S3 и любым типом)
         logger.info("URL send failed, trying fetch+send: %s", err[:60] if err else "")
         body, fname, ct = await _fetch_media_bytes(media_url_public)
         if body and len(body) > 0:
-            if is_video or _is_video_url(media_url_public):
+            if kind == "video":
                 result, err = await tg.send_video_by_bytes(
                     bot_token, chat_id, body, fname or "video.mp4", ct or "video/mp4",
                     caption=text, client=telegram_client
                 )
-            else:
+            elif kind == "photo":
                 result, err = await tg.send_photo_by_bytes(
                     bot_token, chat_id, body, fname or "photo.jpg", ct or "image/jpeg",
+                    caption=text, client=telegram_client
+                )
+            else:
+                result, err = await tg.send_document_by_bytes(
+                    bot_token, chat_id, body, fname or "document.bin",
                     caption=text, client=telegram_client
                 )
             if result:
@@ -336,7 +361,7 @@ async def _send_one_message(
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
             for uid in users:
                 if media_url_public:
-                    ok, err_msg = await _send_media(uid, _is_video_url(media_url_public))
+                    ok, err_msg = await _send_media(uid)
                     if not ok:
                         txt_resp, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
                         result = txt_resp is not None
@@ -355,7 +380,7 @@ async def _send_one_message(
         elif ch.channel_type == DistributionChannelType.TELEGRAM_CHANNEL and ch.telegram_ref:
             chat = _normalize_channel_ref(ch.telegram_ref)
             if media_url_public:
-                ok, err_msg = await _send_media(chat, _is_video_url(media_url_public))
+                ok, err_msg = await _send_media(chat)
                 if not ok:
                     txt_resp, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
                     result = txt_resp is not None

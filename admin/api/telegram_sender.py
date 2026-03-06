@@ -115,6 +115,47 @@ async def send_video_by_bytes(
     return await _post_multipart(client, api_url, data, files, timeout=60.0)
 
 
+async def send_document(
+    bot_token: str,
+    chat_id: str | int,
+    document_url: str,
+    caption: str | None = None,
+    parse_mode: str = PARSE_MODE_HTML,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Отправить документ по URL в чат/канал."""
+    url = f"{TELEGRAM_API}/bot{bot_token}/sendDocument"
+    payload: dict[str, Any] = {"chat_id": chat_id, "document": document_url}
+    if caption:
+        payload["caption"] = caption[:1024]
+        payload["parse_mode"] = parse_mode
+    if client is None:
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            return await _post(c, url, payload)
+    return await _post(client, url, payload)
+
+
+async def send_document_by_bytes(
+    bot_token: str,
+    chat_id: str | int,
+    file_bytes: bytes,
+    filename: str = "document.bin",
+    caption: str | None = None,
+    parse_mode: str = PARSE_MODE_HTML,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Отправить документ как файл (multipart)."""
+    api_url = f"{TELEGRAM_API}/bot{bot_token}/sendDocument"
+    data: dict[str, Any] = {"chat_id": chat_id}
+    if caption:
+        data["caption"] = caption[:1024]
+        data["parse_mode"] = parse_mode
+    files = {"document": (filename, file_bytes, "application/octet-stream")}
+    return await _post_multipart(client, api_url, data, files, timeout=60.0)
+
+
 def _error_description(data: dict[str, Any]) -> str:
     """Текст ошибки из ответа Telegram API для показа пользователю."""
     desc = data.get("description") or data.get("error") or ""
