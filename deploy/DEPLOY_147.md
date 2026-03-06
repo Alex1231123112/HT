@@ -76,6 +76,17 @@ ufw reload
    openssl rand -hex 32
    ```
 
+## Подготовка сервера (VPS на KVM/QEMU)
+
+Для корректной работы (graceful shutdown, отчётность ресурсов) установите QEMU Guest Agent:
+
+```bash
+# На сервере (root)
+apt update && apt install -y qemu-guest-agent
+systemctl enable qemu-guest-agent
+systemctl start qemu-guest-agent
+```
+
 ## Первый деплой
 
 ### Вариант A: Клонирование на сервер
@@ -185,12 +196,25 @@ docker compose exec db pg_dump -U postgres botdb > backup_$(date +%Y%m%d).sql
 
 ## Загрузка файлов и рассылка
 
-**Медиа (картинки, видео):** Файлы сохраняются в MinIO (S3). В `.env` обязательно задайте публичные URL:
+**Медиа (картинки, видео):** Файлы сохраняются в S3. Варианты:
+
+**MinIO (по умолчанию):**
 ```
 S3_PUBLIC_BASE_URL=http://147.45.96.211:9000/uploads
 UPLOAD_PUBLIC_BASE_URL=http://147.45.96.211:9000/uploads
 ```
-Иначе Telegram не сможет скачать медиа при рассылке. Порт 9000 должен быть открыт в файрволе.
+Порт 9000 должен быть открыт.
+
+**Внешний S3 (Timeweb Cloud):** Добавьте в `.env`:
+```
+S3_ENDPOINT_URL=https://s3.twcstorage.ru
+S3_BUCKET=your-bucket-name
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_REGION=ru-1
+S3_PUBLIC_BASE_URL=https://s3.twcstorage.ru/your-bucket-name
+```
+Создайте bucket в [Timeweb Cloud](https://timeweb.cloud/docs/s3-storage) и сделайте его публичным (или настройте политику доступа). Deploy автоматически использует `docker-compose.s3-external.yml` при наличии `S3_ENDPOINT_URL`.
 
 **Контент-план:**
 - **По расписанию:** API каждые 10 сек проверяет планы со статусом `scheduled` и `scheduled_at <= now`, отправляет в бот и каналы.

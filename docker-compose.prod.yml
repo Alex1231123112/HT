@@ -13,11 +13,11 @@ services:
     environment:
       APP_ENV: prod
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://147.45.96.211}
-      S3_PUBLIC_BASE_URL: http://147.45.96.211:9000/uploads
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://147.45.96.211:9000/uploads}
     # В prod можно убрать volume с исходниками — использовать только образ
     # volumes: []
 
   bot:
     environment:
       APP_ENV: prod
-      UPLOAD_PUBLIC_BASE_URL: http://147.45.96.211:9000/uploads
+      UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-http://147.45.96.211:9000/uploads}

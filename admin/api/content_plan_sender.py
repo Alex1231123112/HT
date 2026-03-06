@@ -124,28 +124,31 @@ def _build_text(title: str, description: str) -> str:
 
 def _ensure_public_media_url(url: str | None) -> str | None:
     """
-    Подменяет localhost/127.0.0.1 в URL медиа на публичный base, чтобы Telegram мог скачать файл.
-    В проде API и бот в Docker — Telegram не может обратиться к localhost.
+    Преобразует URL медиа в публичный, доступный для Telegram.
+    - Относительные пути (/uploads/xxx) → полный URL с base
+    - localhost/127.0.0.1 → подмена на публичный base
     """
     if not url or not url.strip():
         return None
     u = url.strip()
-    if "localhost" not in u and "127.0.0.1" not in u:
-        return u
     st = get_settings()
     base = None
     if st.use_s3 and st.s3_public_base_url:
         base = st.s3_public_base_url.rstrip("/")
     elif st.upload_public_base_url:
         base = st.upload_public_base_url.rstrip("/")
-    if not base:
-        return u
-    try:
-        parsed = urlparse(u)
-        path = parsed.path or "/"
-        return f"{base}{path}"
-    except Exception:
-        return u
+    # Относительный путь: /uploads/xxx.jpg → base + path
+    if u.startswith("/") and base:
+        return f"{base}{u}"
+    # localhost/127.0.0.1 → подмена
+    if ("localhost" in u or "127.0.0.1" in u) and base:
+        try:
+            parsed = urlparse(u)
+            path = parsed.path or "/"
+            return f"{base}{path}"
+        except Exception:
+            return u
+    return u
 
 
 def _is_video_url(url: str) -> bool:
@@ -186,13 +189,19 @@ async def _send_one_message(
     media_url_public = _ensure_public_media_url(media_url)
     if media_url_public:
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 r = await client.head(media_url_public)
-                if r.status_code != 200 or (r.headers.get("content-type") or "").startswith("text/html"):
-                    logger.warning("Media URL unreachable or HTML: %s status=%s ct=%s", media_url_public[:80], r.status_code, r.headers.get("content-type"))
+                ct = (r.headers.get("content-type") or "").lower()
+                if r.status_code == 404:
+                    logger.warning("Media 404, sending text only: %s", media_url_public[:100])
+                    media_url_public = None
+                elif r.status_code != 200:
+                    logger.warning("Media pre-check status=%s, trying send anyway: %s", r.status_code, media_url_public[:80])
+                elif "text/html" in ct:
+                    logger.warning("Media URL returns HTML (likely error page), sending text only: %s", media_url_public[:80])
                     media_url_public = None
         except Exception as e:
-            logger.warning("Media URL pre-check failed (will try send anyway): %s", e)
+            logger.warning("Media pre-check failed (trying send anyway): %s url=%s", e, media_url_public[:80])
     sent_bot = 0
     sent_channel = 0
     errors: list[str] = []

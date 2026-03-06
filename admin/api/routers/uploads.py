@@ -18,11 +18,14 @@ def _upload_to_s3_sync(bucket: str, key: str, body: bytes, content_type: str) ->
     import boto3
     from botocore.config import Config
 
+    config = Config(signature_version="s3v4")
+    if settings.s3_endpoint_url:
+        config = Config(signature_version="s3v4", s3={"addressing_style": "path"})
     client_kw: dict = {
         "service_name": "s3",
         "aws_access_key_id": settings.s3_access_key_id,
         "aws_secret_access_key": settings.s3_secret_access_key,
-        "config": Config(signature_version="s3v4"),
+        "config": config,
     }
     if settings.s3_region:
         client_kw["region_name"] = settings.s3_region
