@@ -101,10 +101,19 @@ async def shutdown() -> None:
 
 
 async def _scheduled_content_plan_worker() -> None:
+    import logging
+    log = logging.getLogger(__name__)
     interval = max(10, settings.content_plan_check_interval_seconds)
     while True:
-        async with SessionLocal() as db:
-            await process_due_content_plans(db, settings.bot_token)
+        try:
+            async with SessionLocal() as db:
+                n = await process_due_content_plans(db, settings.bot_token)
+                if n > 0:
+                    log.info("Content plan worker: sent %s plan(s)", n)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.exception("Content plan worker error (will retry): %s", e)
         await asyncio.sleep(interval)
 
 

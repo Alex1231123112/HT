@@ -9,7 +9,19 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from bot.keyboards import edit_profile_keyboard, profile_keyboard
+from bot.keyboards import (
+    BTN_BACK,
+    BTN_EDIT_BIRTH_DATE,
+    BTN_EDIT_ESTABLISHMENT,
+    BTN_EDIT_FULL_NAME,
+    BTN_EDIT_PHONE,
+    BTN_EDIT_POSITION,
+    BTN_EDIT_PROFILE,
+    BTN_PROFILE,
+    edit_profile_keyboard,
+    profile_keyboard,
+    request_phone_keyboard,
+)
 from database.models import Establishment, User, UserType
 from database.session import SessionLocal
 
@@ -66,6 +78,30 @@ def _format_profile(user: User) -> str:
     )
 
 
+async def _show_profile_by_message(message: Message) -> bool:
+    """Показать профиль пользователя. Возвращает True если показан, False если пользователь не найден."""
+    try:
+        async with SessionLocal() as session:
+            user = await session.get(User, message.from_user.id)
+            if not user or user.deleted_at is not None:
+                await message.answer("Сначала выполните регистрацию через /start")
+                return False
+            text = _format_profile(user)
+    except SQLAlchemyError:
+        logger.exception("Database error loading profile")
+        await message.answer("Не удалось загрузить профиль. Попробуйте позже.")
+        return False
+    await message.answer(text, reply_markup=profile_keyboard(), parse_mode="HTML")
+    return True
+
+
+@router.message(F.text == BTN_PROFILE)
+async def show_profile_msg(message: Message, state: FSMContext) -> None:
+    """При нажатии «Мой профиль» (reply-кнопка) — показать профиль и клавиатуру профиля."""
+    await state.clear()
+    await _show_profile_by_message(message)
+
+
 @router.callback_query(F.data == "menu_profile")
 async def show_profile(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
@@ -86,11 +122,29 @@ async def show_profile(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.message(F.text == BTN_EDIT_PROFILE)
+async def profile_edit_menu_msg(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Что вы хотите изменить?", reply_markup=edit_profile_keyboard())
+
+
+@router.message(F.text == BTN_BACK)
+async def profile_back_msg(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await _show_profile_by_message(message)
+
+
 @router.callback_query(F.data == "profile_edit")
 async def profile_edit_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.answer("Что вы хотите изменить?", reply_markup=edit_profile_keyboard())
     await callback.answer()
+
+
+@router.message(F.text == BTN_EDIT_ESTABLISHMENT)
+async def edit_establishment_start_msg(message: Message, state: FSMContext) -> None:
+    await state.set_state(ProfileEdit.editing_establishment)
+    await message.answer("Введите новое название заведения:")
 
 
 @router.callback_query(F.data == "edit_establishment")
@@ -100,11 +154,23 @@ async def edit_establishment_start(callback: CallbackQuery, state: FSMContext) -
     await callback.answer()
 
 
+@router.message(F.text == BTN_EDIT_FULL_NAME)
+async def edit_full_name_start_msg(message: Message, state: FSMContext) -> None:
+    await state.set_state(ProfileEdit.editing_full_name)
+    await message.answer("Введите имя (ФИО или как обращаться):")
+
+
 @router.callback_query(F.data == "edit_full_name")
 async def edit_full_name_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ProfileEdit.editing_full_name)
     await callback.message.answer("Введите имя (ФИО или как обращаться):")
     await callback.answer()
+
+
+@router.message(F.text == BTN_EDIT_BIRTH_DATE)
+async def edit_birth_date_start_msg(message: Message, state: FSMContext) -> None:
+    await state.set_state(ProfileEdit.editing_birth_date)
+    await message.answer("Введите дату рождения (ДД.ММ.ГГГГ). Возраст должен быть 18+:")
 
 
 @router.callback_query(F.data == "edit_birth_date")
@@ -114,6 +180,12 @@ async def edit_birth_date_start(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
 
 
+@router.message(F.text == BTN_EDIT_POSITION)
+async def edit_position_start_msg(message: Message, state: FSMContext) -> None:
+    await state.set_state(ProfileEdit.editing_position)
+    await message.answer("Введите должность или род деятельности:")
+
+
 @router.callback_query(F.data == "edit_position")
 async def edit_position_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ProfileEdit.editing_position)
@@ -121,10 +193,22 @@ async def edit_position_start(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.answer()
 
 
+@router.message(F.text == BTN_EDIT_PHONE)
+async def edit_phone_start_msg(message: Message, state: FSMContext) -> None:
+    await state.set_state(ProfileEdit.editing_phone)
+    await message.answer(
+        "Отправьте номер телефона кнопкой ниже или напишите в чат (например +7 999 123-45-67):",
+        reply_markup=request_phone_keyboard(),
+    )
+
+
 @router.callback_query(F.data == "edit_phone")
 async def edit_phone_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ProfileEdit.editing_phone)
-    await callback.message.answer("Напишите новый номер телефона в чат (например +7 999 123-45-67):")
+    await callback.message.answer(
+        "Отправьте номер телефона кнопкой ниже или напишите в чат (например +7 999 123-45-67):",
+        reply_markup=request_phone_keyboard(),
+    )
     await callback.answer()
 
 

@@ -484,6 +484,7 @@ async def process_due_content_plans(db: AsyncSession, bot_token: str) -> int:
             plan.status = ContentPlanStatus.SENT
             plan.sent_at = now
             db.add(plan)
+            await db.commit()
             logger.info(
                 "Content plan %s sent: bot=%s channel=%s errors=%s",
                 plan.id,
@@ -492,7 +493,6 @@ async def process_due_content_plans(db: AsyncSession, bot_token: str) -> int:
                 result["errors"],
             )
         except Exception as e:
+            await db.rollback()
             logger.exception("Content plan %s send failed: %s", plan.id, e)
-        # продолжаем со следующим планом
-    await db.commit()
     return len(due)

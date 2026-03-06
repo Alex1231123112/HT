@@ -10,7 +10,14 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from bot.keyboards import birth_date_retry_keyboard, menu_keyboard, type_keyboard
+from bot.keyboards import (
+    BTN_TYPE_HORECA,
+    BTN_TYPE_RETAIL,
+    birth_date_retry_keyboard,
+    menu_keyboard,
+    request_phone_keyboard,
+    type_keyboard,
+)
 from config.settings import get_settings
 from database.models import Establishment, User, UserType
 from database.session import SessionLocal
@@ -98,7 +105,8 @@ async def start(message: Message, state: FSMContext) -> None:
         "• Информация о приходах\n"
         "• Связь с менеджерами\n"
         "• Информация о мероприятиях\n\n"
-        "Для продолжения напишите номер телефона в чат (например +7 999 123-45-67):",
+        "Для продолжения отправьте номер телефона кнопкой ниже или напишите в чат (например +7 999 123-45-67):",
+        reply_markup=request_phone_keyboard(),
         parse_mode="HTML",
     )
 
@@ -107,7 +115,8 @@ async def start(message: Message, state: FSMContext) -> None:
 async def start_reregister(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(Registration.waiting_phone)
     await callback.message.answer(
-        "Обновление профиля. Напишите номер телефона в чат (например +7 999 123-45-67):",
+        "Обновление профиля. Отправьте номер кнопкой ниже или напишите в чат (например +7 999 123-45-67):",
+        reply_markup=request_phone_keyboard(),
     )
     await callback.answer()
 
@@ -139,6 +148,32 @@ async def waiting_phone_other(message: Message) -> None:
     await message.answer("Напишите номер телефона в чат (например +7 999 123-45-67).")
 
 
+def _ask_establishment(selected: str) -> str:
+    if selected == "horeca":
+        return (
+            "Введите название вашего заведения:\n"
+            "(например: «Кальянная Lounge», «Ресторан Восток», «Бар Спорт»)"
+        )
+    return (
+        "Введите название вашего заведения:\n"
+        "(например: «Табачная лавка №1», «Магазин Кальянный Мир», «Торговая точка на Баумана»)"
+    )
+
+
+@router.message(Registration.choosing_type, F.text == BTN_TYPE_HORECA)
+async def choose_type_horeca_msg(message: Message, state: FSMContext) -> None:
+    await state.update_data(user_type="horeca")
+    await state.set_state(Registration.waiting_establishment)
+    await message.answer(_ask_establishment("horeca"))
+
+
+@router.message(Registration.choosing_type, F.text == BTN_TYPE_RETAIL)
+async def choose_type_retail_msg(message: Message, state: FSMContext) -> None:
+    await state.update_data(user_type="retail")
+    await state.set_state(Registration.waiting_establishment)
+    await message.answer(_ask_establishment("retail"))
+
+
 @router.callback_query(Registration.choosing_type, F.data.startswith("type_"))
 async def choose_type(callback: CallbackQuery, state: FSMContext) -> None:
     selected = callback.data.split("_", maxsplit=1)[1]
@@ -148,17 +183,7 @@ async def choose_type(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.update_data(user_type=selected)
     await state.set_state(Registration.waiting_establishment)
-    if selected == "horeca":
-        text = (
-            "Введите название вашего заведения:\n"
-            "(например: «Кальянная Lounge», «Ресторан Восток», «Бар Спорт»)"
-        )
-    else:
-        text = (
-            "Введите название вашего заведения:\n"
-            "(например: «Табачная лавка №1», «Магазин Кальянный Мир», «Торговая точка на Баумана»)"
-        )
-    await callback.message.answer(text)
+    await callback.message.answer(_ask_establishment(selected))
     await callback.answer()
 
 

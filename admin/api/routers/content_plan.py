@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -138,11 +139,17 @@ async def debug_plan_media(
 
 
 def _naive_utc(dt: datetime | None) -> datetime | None:
-    """Привести datetime к naive UTC для совместимости с PostgreSQL/asyncpg."""
+    """Привести datetime к naive UTC. С timezone — конвертируем в UTC; без (naive) — считаем локальным по TIMEZONE."""
     if dt is None:
         return None
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    else:
+        try:
+            tz = ZoneInfo(get_settings().timezone)
+            dt = dt.replace(tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            pass
     return dt
 
 
@@ -206,6 +213,8 @@ async def update_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     data = payload.model_dump(exclude_unset=True, exclude={"channel_ids", "items"})
+    if data.get("scheduled_at") is not None:
+        data["scheduled_at"] = _naive_utc(data["scheduled_at"])
     for k, v in data.items():
         setattr(plan, k, v)
     if payload.channel_ids is not None:

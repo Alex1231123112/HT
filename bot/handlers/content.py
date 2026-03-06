@@ -3,7 +3,17 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import func, select
 
-from bot.keyboards import events_back_keyboard, menu_keyboard
+from bot.keyboards import (
+    BTN_DELIVERIES,
+    BTN_EVENTS,
+    BTN_MENU,
+    BTN_NEWS,
+    BTN_PROFILE,
+    BTN_PROMOTIONS,
+    BTN_UPDATE_PROFILE,
+    events_back_keyboard,
+    menu_keyboard,
+)
 from bot.utils import render_content, render_events
 from config.settings import get_settings
 from database.models import Delivery, Event, EventRegistration, Manager, News, Promotion, User
@@ -37,52 +47,103 @@ async def menu_command(message: Message) -> None:
     await message.answer("<b>Главное меню:</b>", reply_markup=kb, parse_mode="HTML")
 
 
-@router.callback_query(F.data == "menu_promotions")
-async def promotions(callback: CallbackQuery) -> None:
-    if callback.message:
-        await render_content(
-            callback.message, Promotion, "🎁 Актуальные акции:", user_id=callback.from_user.id
-        )
-    await callback.answer()
+@router.message(F.text == BTN_PROMOTIONS)
+async def promotions_msg(message: Message) -> None:
+    await render_content(message, Promotion, "🎁 Актуальные акции:", user_id=message.from_user.id if message.from_user else None)
 
 
-@router.callback_query(F.data == "menu_news")
-async def news(callback: CallbackQuery) -> None:
-    if callback.message:
-        await render_content(
-            callback.message, News, "📰 Актуальные новинки:", user_id=callback.from_user.id
-        )
-    await callback.answer()
+@router.message(F.text == BTN_NEWS)
+async def news_msg(message: Message) -> None:
+    await render_content(message, News, "📰 Актуальные новинки:", user_id=message.from_user.id if message.from_user else None)
 
 
-@router.callback_query(F.data == "menu_deliveries")
-async def deliveries(callback: CallbackQuery) -> None:
-    if callback.message:
-        await render_content(
-            callback.message, Delivery, "📦 Актуальные приходы:", user_id=callback.from_user.id
-        )
-    await callback.answer()
+@router.message(F.text == BTN_DELIVERIES)
+async def deliveries_msg(message: Message) -> None:
+    await render_content(message, Delivery, "📦 Актуальные приходы:", user_id=message.from_user.id if message.from_user else None)
 
 
-@router.callback_query(F.data == "menu_events")
-async def events(callback: CallbackQuery) -> None:
-    if callback.message:
-        await render_events(callback.message, user_id=callback.from_user.id)
-        await callback.message.answer("Выберите раздел:", reply_markup=events_back_keyboard())
-    await callback.answer()
+@router.message(F.text == BTN_EVENTS)
+async def events_msg(message: Message) -> None:
+    await render_events(message, user_id=message.from_user.id if message.from_user else None)
+    await message.answer("Выберите раздел:", reply_markup=events_back_keyboard())
 
 
-@router.callback_query(F.data == "menu_back")
-async def menu_back(callback: CallbackQuery) -> None:
-    establishment = None
-    if callback.from_user:
+@router.message(F.text.in_({BTN_MENU, BTN_UPDATE_PROFILE}))
+async def menu_back_msg(message: Message) -> None:
+    kb = await menu_keyboard(with_update_profile=True, user_establishment=None)
+    if message.from_user:
         async with SessionLocal() as session:
-            user = await session.get(User, callback.from_user.id)
+            user = await session.get(User, message.from_user.id)
             if user:
-                establishment = user.establishment
-    kb = await menu_keyboard(with_update_profile=True, user_establishment=establishment)
-    await callback.message.answer("📱 <b>Главное меню</b>\n\nВыберите раздел:", reply_markup=kb, parse_mode="HTML")
-    await callback.answer()
+                kb = await menu_keyboard(with_update_profile=True, user_establishment=user.establishment)
+    await message.answer("📱 <b>Главное меню</b>\n\nВыберите раздел:", reply_markup=kb, parse_mode="HTML")
+
+
+@router.message(F.text == BTN_MANAGER)
+async def menu_manager_msg(message: Message) -> None:
+    """При нажатии «Менеджер» (reply-кнопка) — показать список или ссылку."""
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+    user_establishment = None
+    async with SessionLocal() as session:
+        user = await session.get(User, user_id)
+        if user:
+            user_establishment = user.establishment
+    managers = await _get_managers_for_user(user_establishment)
+    settings = get_settings()
+    if not managers:
+        uname = (settings.manager_username or "manager").strip().lstrip("@")
+        if uname:
+            text = "💬 <b>Связь с менеджером</b>\n\nНажмите кнопку ниже, чтобы написать в Telegram."
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="✉️ Написать в Telegram", url=f"https://t.me/{uname}")],
+                ]
+            )
+            await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
+            await message.answer("Менеджер не настроен.")
+        return
+    if len(managers) == 1:
+        m = managers[0]
+        uname = (m.telegram_username or "").strip().lstrip("@")
+        if not uname:
+            await message.answer("У менеджера не указан Telegram.")
+            return
+        name = m.full_name or "Менеджер"
+        phone = m.phone_number or ""
+        establishment = m.establishment or ""
+        lines = [f"💬 <b>{name}</b>"]
+        if establishment:
+            lines.append(f"🏢 {establishment}")
+        if phone:
+            lines.append(f"📞 {phone}")
+        lines.append(f"\n@{uname}")
+        lines.append("\nНажмите кнопку ниже, чтобы написать в Telegram.")
+        text = "\n".join(lines)
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✉️ Написать в Telegram", url=f"https://t.me/{uname}")],
+            ]
+        )
+        await message.answer(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        text = "💬 <b>Связь с менеджерами</b>\n\nВыберите менеджера:"
+        rows = []
+        for m in managers:
+            uname = (m.telegram_username or "").strip().lstrip("@")
+            if not uname:
+                continue
+            label = m.full_name or m.establishment or m.telegram_username or "Менеджер"
+            if m.establishment:
+                label = f"{label} ({m.establishment[:25]}{'…' if len(m.establishment or '') > 25 else ''})"
+            rows.append([InlineKeyboardButton(text=f"💬 {label}", callback_data=f"manager_{m.id}")])
+        if rows:
+            kb = InlineKeyboardMarkup(inline_keyboard=rows)
+            await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
+            await message.answer("Нет доступных менеджеров.")
 
 
 async def _get_managers_for_user(user_establishment: str | None) -> list:
