@@ -34,9 +34,10 @@ jobs:
             cd /opt/ht || { echo "ERROR: cd /opt/ht failed"; exit 1; }
             for i in 1 2 3; do
               echo "git fetch attempt $i..."
-              timeout 60 git fetch origin && break
+              timeout 180 git fetch origin && break
               [ $i -eq 3 ] && { echo "ERROR: git fetch failed after 3 attempts"; exit 1; }
-              sleep 5
+              echo "fetch timeout, retrying in 10s..."
+              sleep 10
             done
             git reset --hard origin/main
             chmod +x deploy/deploy.sh
