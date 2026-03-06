@@ -43,9 +43,11 @@ def _media_url(url: str | None) -> str | None:
         public_base = (st.s3_public_base_url or "").rstrip("/")
     if not public_base and getattr(st, "upload_public_base_url", None):
         public_base = (st.upload_public_base_url or "").rstrip("/")
+    if not public_base and getattr(st, "app_env", "").lower() == "prod":
+        logging.warning(
+            "Bot media: UPLOAD_PUBLIC_BASE_URL/S3_PUBLIC_BASE_URL not set in prod; media URLs may be unreachable by Telegram"
+        )
     if public_base:
-        if u.startswith("/"):
-            return f"{public_base}{u}"
         if u.startswith(("http://", "https://")):
             if u.startswith(public_base):
                 return u
@@ -57,6 +59,10 @@ def _media_url(url: str | None) -> str | None:
                     return f"{public_base}{path}{query}"
             except Exception as e:
                 logging.warning("Failed to rewrite media URL with public base: %s", e)
+        else:
+            # Относительный путь: /uploads/xxx или uploads/xxx → public_base + path
+            path = u if u.startswith("/") else f"/{u}"
+            return f"{public_base}{path}"
     if u.startswith(("http://", "https://")):
         return u
     base = (st.upload_base_url or "").rstrip("/")
