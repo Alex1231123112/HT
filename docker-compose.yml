@@ -84,7 +84,9 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
-      # URL медиа, доступный из интернета (Telegram скачивает по нему файлы). Без этого картинки/видео в боте не отображаются.
+      # Бот качает медиа по этому URL (внутри сети). Для Docker — api:8000.
+      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://api:8000}
+      # Публичный URL для fallback (если отправка файлом не сработает)
       UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-}
     depends_on:
       db:

@@ -20,5 +20,6 @@ services:
   bot:
     environment:
       APP_ENV: prod
-      # Медиа берём с API (порт 8000), не с MinIO
+      # Бот качает медиа по api:8000 (внутри сети), затем шлёт файлом в Telegram
+      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://api:8000}
       UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-http://147.45.96.211:8000}

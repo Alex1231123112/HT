@@ -4,7 +4,8 @@ import re
 from datetime import datetime
 from urllib.parse import urlparse
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+import httpx
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -76,6 +77,36 @@ def _is_video_url(url: str) -> bool:
     return any(lower.endswith(ext) for ext in (".mp4", ".webm", ".mov"))
 
 
+def _fetch_url(raw_url: str | None) -> str | None:
+    """URL, по которому бот может скачать файл (из своей сети: api, S3 и т.д.)."""
+    if not raw_url or not raw_url.strip():
+        return None
+    u = raw_url.strip()
+    if u.startswith(("http://", "https://")):
+        return u
+    base = (settings.upload_base_url or "").rstrip("/")
+    path = u if u.startswith("/") else f"/{u}"
+    return f"{base}{path}" if base else None
+
+
+async def _fetch_media_bytes(url: str) -> tuple[bytes | None, str]:
+    """Скачать медиа по URL. Возвращает (bytes, content_type) или (None, '')."""
+    if not url:
+        return None, ""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                return None, ""
+            ct = (r.headers.get("content-type") or "").split(";")[0].strip() or "application/octet-stream"
+            if "text/html" in ct:
+                return None, ""
+            return r.content, ct
+    except Exception as e:
+        logging.warning("Bot media fetch failed url=%s: %s", url[:80], e)
+        return None, ""
+
+
 def _description_for_telegram(html_desc: str | None) -> str:
     """Описание уже в HTML; нормализуем для Telegram. Telegram не поддерживает <br>, используем \\n."""
     if not html_desc or not html_desc.strip():
@@ -94,17 +125,41 @@ async def _send_content_item(message: Message, item, parse_mode: str = "HTML") -
     text = f"<b>{safe_title}</b>\n\n{desc_html}" if desc_html else f"<b>{safe_title}</b>"
     if len(text) > 4096:
         text = text[:4090] + "..."
-    media_url = _media_url(item.image_url)
-    if media_url:
-        try:
-            if _is_video_url(media_url):
-                await message.answer_video(video=media_url, caption=text, parse_mode=parse_mode)
-            else:
-                await message.answer_photo(photo=media_url, caption=text, parse_mode=parse_mode)
-        except Exception:
-            logging.exception("Failed to send media, falling back to text")
-            await message.answer(text, parse_mode=parse_mode)
-    else:
+    raw_url = getattr(item, "image_url", None)
+    fetch_url = _fetch_url(raw_url)
+    sent = False
+    if fetch_url:
+        body, ct = await _fetch_media_bytes(fetch_url)
+        if body and len(body) > 0:
+            is_video = _is_video_url(fetch_url)
+            try:
+                if is_video:
+                    await message.answer_video(
+                        video=BufferedInputFile(file=body, filename="video.mp4"),
+                        caption=text,
+                        parse_mode=parse_mode,
+                    )
+                else:
+                    await message.answer_photo(
+                        photo=BufferedInputFile(file=body, filename="photo.jpg"),
+                        caption=text,
+                        parse_mode=parse_mode,
+                    )
+                sent = True
+            except Exception:
+                logging.exception("Send media by bytes failed, trying URL")
+        if not sent:
+            media_url = _media_url(raw_url)
+            if media_url:
+                try:
+                    if _is_video_url(media_url):
+                        await message.answer_video(video=media_url, caption=text, parse_mode=parse_mode)
+                    else:
+                        await message.answer_photo(photo=media_url, caption=text, parse_mode=parse_mode)
+                    sent = True
+                except Exception:
+                    logging.exception("Failed to send media by URL, falling back to text")
+    if not sent:
         await message.answer(text, parse_mode=parse_mode)
 
 
@@ -200,21 +255,46 @@ async def _send_event_item(
         user_registered=user_registered,
         places_left=max_places is None or registered_count < max_places,
     )
-    media_url = _media_url(event.image_url)
-    if media_url:
-        try:
-            if _is_video_url(media_url):
-                await message.answer_video(
-                    video=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
-                )
-            else:
-                await message.answer_photo(
-                    photo=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
-                )
-        except Exception:
-            logging.exception("Failed to send event media, falling back to text")
-            await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
-    else:
+    raw_url = getattr(event, "image_url", None)
+    fetch_url = _fetch_url(raw_url)
+    sent = False
+    if fetch_url:
+        body, _ = await _fetch_media_bytes(fetch_url)
+        if body and len(body) > 0:
+            try:
+                if _is_video_url(fetch_url):
+                    await message.answer_video(
+                        video=BufferedInputFile(file=body, filename="video.mp4"),
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                else:
+                    await message.answer_photo(
+                        photo=BufferedInputFile(file=body, filename="photo.jpg"),
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                sent = True
+            except Exception:
+                logging.exception("Send event media by bytes failed, trying URL")
+        if not sent:
+            media_url = _media_url(raw_url)
+            if media_url:
+                try:
+                    if _is_video_url(media_url):
+                        await message.answer_video(
+                            video=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
+                        )
+                    else:
+                        await message.answer_photo(
+                            photo=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
+                        )
+                    sent = True
+                except Exception:
+                    logging.exception("Failed to send event media by URL, falling back to text")
+    if not sent:
         await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
 
