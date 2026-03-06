@@ -20,12 +20,16 @@ else
 fi
 # BuildKit + кэш: npm/pip кэшируются между сборками
 export DOCKER_BUILDKIT=1
+export BUILDKIT_PROGRESS=plain
+echo "=== Building images (может занять 5–10 мин) ==="
 if [ "$1" = "--no-cache" ]; then
-  $COMPOSE build --no-cache
+  $COMPOSE build --no-cache --progress=plain
 else
-  $COMPOSE build
+  $COMPOSE build --progress=plain
 fi
+echo "=== Stopping old containers ==="
 $COMPOSE down 2>/dev/null || true
+echo "=== Starting containers ==="
 $COMPOSE up -d
 sleep 5
 $COMPOSE exec -T api alembic upgrade head
