@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -52,12 +53,18 @@ REQ_LATENCY = Histogram("api_latency_seconds", "API latency", ["path", "method"]
 _scheduler_task: asyncio.Task | None = None
 
 
+def _normalize_metrics_path(path: str) -> str:
+    """Сокращает кардинальность: /api/content-plan/123 -> /api/content-plan/{id}."""
+    return re.sub(r"/\d+(?=/|$)", "/{id}", path) if path else "/"
+
+
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     start = datetime.utcnow()
     response = await call_next(request)
-    REQ_COUNT.labels(path=request.url.path, method=request.method).inc()
-    REQ_LATENCY.labels(path=request.url.path, method=request.method).observe((datetime.utcnow() - start).total_seconds())
+    norm_path = _normalize_metrics_path(request.url.path)
+    REQ_COUNT.labels(path=norm_path, method=request.method).inc()
+    REQ_LATENCY.labels(path=norm_path, method=request.method).observe((datetime.utcnow() - start).total_seconds())
     return response
 
 
@@ -94,10 +101,11 @@ async def shutdown() -> None:
 
 
 async def _scheduled_content_plan_worker() -> None:
+    interval = max(10, settings.content_plan_check_interval_seconds)
     while True:
         async with SessionLocal() as db:
             await process_due_content_plans(db, settings.bot_token)
-        await asyncio.sleep(10)
+        await asyncio.sleep(interval)
 
 
 @app.get("/health", response_model=GenericMessage)
