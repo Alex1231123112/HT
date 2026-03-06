@@ -77,6 +77,36 @@ def _is_video_url(url: str) -> bool:
     return any(lower.endswith(ext) for ext in (".mp4", ".webm", ".mov"))
 
 
+def _is_image_url(url: str) -> bool:
+    """Форматы, которые Telegram отображает как фото (answer_photo)."""
+    lower = url.lower()
+    return any(lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"))
+
+
+def _media_kind(url: str, content_type: str = "") -> str:
+    """'video' | 'photo' | 'document' — как отправлять файл."""
+    if _is_video_url(url):
+        return "video"
+    if _is_image_url(url):
+        return "photo"
+    ct = content_type.lower()
+    if ct.startswith("video/"):
+        return "video"
+    if ct.startswith("image/"):
+        return "photo"
+    return "document"
+
+
+def _filename_from_url(url: str, default: str = "document.bin") -> str:
+    """Имя файла из URL (последний сегмент пути) или default."""
+    if not url:
+        return default
+    path = urlparse(url).path.strip("/")
+    if path and "/" in path:
+        return path.split("/")[-1] or default
+    return path or default
+
+
 def _fetch_url(raw_url: str | None) -> str | None:
     """URL, по которому бот может скачать файл (из своей сети: api, S3 и т.д.)."""
     if not raw_url or not raw_url.strip():
@@ -131,17 +161,24 @@ async def _send_content_item(message: Message, item, parse_mode: str = "HTML") -
     if fetch_url:
         body, ct = await _fetch_media_bytes(fetch_url)
         if body and len(body) > 0:
-            is_video = _is_video_url(fetch_url)
+            kind = _media_kind(fetch_url, ct)
+            fname = _filename_from_url(fetch_url, "file.bin")
             try:
-                if is_video:
+                if kind == "video":
                     await message.answer_video(
-                        video=BufferedInputFile(file=body, filename="video.mp4"),
+                        video=BufferedInputFile(file=body, filename=fname),
+                        caption=text,
+                        parse_mode=parse_mode,
+                    )
+                elif kind == "photo":
+                    await message.answer_photo(
+                        photo=BufferedInputFile(file=body, filename=fname),
                         caption=text,
                         parse_mode=parse_mode,
                     )
                 else:
-                    await message.answer_photo(
-                        photo=BufferedInputFile(file=body, filename="photo.jpg"),
+                    await message.answer_document(
+                        document=BufferedInputFile(file=body, filename=fname),
                         caption=text,
                         parse_mode=parse_mode,
                     )
@@ -152,10 +189,13 @@ async def _send_content_item(message: Message, item, parse_mode: str = "HTML") -
             media_url = _media_url(raw_url)
             if media_url:
                 try:
-                    if _is_video_url(media_url):
+                    kind = _media_kind(media_url)
+                    if kind == "video":
                         await message.answer_video(video=media_url, caption=text, parse_mode=parse_mode)
-                    else:
+                    elif kind == "photo":
                         await message.answer_photo(photo=media_url, caption=text, parse_mode=parse_mode)
+                    else:
+                        await message.answer_document(document=media_url, caption=text, parse_mode=parse_mode)
                     sent = True
                 except Exception:
                     logging.exception("Failed to send media by URL, falling back to text")
@@ -259,19 +299,28 @@ async def _send_event_item(
     fetch_url = _fetch_url(raw_url)
     sent = False
     if fetch_url:
-        body, _ = await _fetch_media_bytes(fetch_url)
+        body, ct = await _fetch_media_bytes(fetch_url)
         if body and len(body) > 0:
+            kind = _media_kind(fetch_url, ct)
+            fname = _filename_from_url(fetch_url, "file.bin")
             try:
-                if _is_video_url(fetch_url):
+                if kind == "video":
                     await message.answer_video(
-                        video=BufferedInputFile(file=body, filename="video.mp4"),
+                        video=BufferedInputFile(file=body, filename=fname),
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                elif kind == "photo":
+                    await message.answer_photo(
+                        photo=BufferedInputFile(file=body, filename=fname),
                         caption=text,
                         parse_mode="HTML",
                         reply_markup=keyboard,
                     )
                 else:
-                    await message.answer_photo(
-                        photo=BufferedInputFile(file=body, filename="photo.jpg"),
+                    await message.answer_document(
+                        document=BufferedInputFile(file=body, filename=fname),
                         caption=text,
                         parse_mode="HTML",
                         reply_markup=keyboard,
@@ -283,13 +332,18 @@ async def _send_event_item(
             media_url = _media_url(raw_url)
             if media_url:
                 try:
-                    if _is_video_url(media_url):
+                    kind = _media_kind(media_url)
+                    if kind == "video":
                         await message.answer_video(
                             video=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
                         )
-                    else:
+                    elif kind == "photo":
                         await message.answer_photo(
                             photo=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
+                        )
+                    else:
+                        await message.answer_document(
+                            document=media_url, caption=text, parse_mode="HTML", reply_markup=keyboard
                         )
                     sent = True
                 except Exception:
