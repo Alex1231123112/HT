@@ -13,10 +13,11 @@ if ! docker compose version &>/dev/null; then
 fi
 [ ! -f .env ] && { echo "ERROR: .env not found"; exit 1; }
 
-COMPOSE="docker compose -f docker-compose.yml"
-# Внешний S3 (Timeweb и т.п.): если в .env задан S3_ENDPOINT_URL — не используем MinIO
+# Внешний S3: используем standalone compose без MinIO. Иначе — base с MinIO.
 if [ -f docker-compose.s3-external.yml ] && grep -qE '^S3_ENDPOINT_URL=' .env 2>/dev/null; then
-  COMPOSE="$COMPOSE -f docker-compose.s3-external.yml"
+  COMPOSE="docker compose -f docker-compose.s3-external.yml"
+else
+  COMPOSE="docker compose -f docker-compose.yml"
 fi
 [ -f docker-compose.prod.yml ] && COMPOSE="$COMPOSE -f docker-compose.prod.yml"
 # BuildKit + кэш: npm/pip кэшируются между сборками
@@ -24,9 +25,9 @@ export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain
 echo "=== Building images (может занять 5–10 мин) [$(date '+%H:%M:%S')] ==="
 if [ "$1" = "--no-cache" ]; then
-  $COMPOSE build --no-cache --progress=plain
+  $COMPOSE --progress=plain build --no-cache
 else
-  $COMPOSE build --progress=plain
+  $COMPOSE --progress=plain build
 fi
 echo "=== Stopping old containers ==="
 $COMPOSE down 2>/dev/null || true

@@ -1,5 +1,7 @@
-# Override для внешнего S3 (Timeweb Cloud, AWS и т.п.) вместо MinIO.
-# Использование: docker compose -f docker-compose.yml -f docker-compose.s3-external.yml -f docker-compose.prod.yml up -d
+# Standalone compose для внешнего S3 (Timeweb Cloud и т.п.) — без MinIO.
+# Использование: docker compose -f docker-compose.s3-external.yml -f docker-compose.prod.yml up -d
+#
+# Deploy автоматически использует этот файл при наличии S3_ENDPOINT_URL в .env.
 #
 # В .env задайте:
 #   S3_ENDPOINT_URL=https://s3.twcstorage.ru
@@ -10,24 +12,78 @@
 #   S3_PUBLIC_BASE_URL=https://s3.twcstorage.ru/your-bucket-name
 
 services:
-  minio:
-    profiles: ["minio"]
-
-  minio-init:
-    profiles: ["minio"]
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: botdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d botdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
 
   api:
-    depends_on:
-      db:
-        condition: service_healthy
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api
+    volumes:
+      - .:/app
+    env_file:
+      - .env
     environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       S3_BUCKET: ${S3_BUCKET}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
       S3_REGION: ${S3_REGION:-ru-1}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   bot:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.bot
+    env_file:
+      - .env
     environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
       UPLOAD_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_CSRF_TOKEN: ${CSRF_SECRET:-ac70da5b0adc0cd35ea5abf1a98f680e1712f390b2ea225f59bb989f86dcfb09}
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
