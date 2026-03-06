@@ -15,31 +15,53 @@ from database.session import SessionLocal
 settings = get_settings()
 
 
+def _is_internal_media_host(netloc: str) -> bool:
+    """Хост считается внутренним, если Telegram с интернета не достучится (localhost, api, minio и т.д.)."""
+    if not netloc:
+        return True
+    host = netloc.split(":")[0].lower()
+    if host in ("localhost", "127.0.0.1", "api", "backend", "app", "minio", "api-internal"):
+        return True
+    if "localhost" in host or host.startswith("127."):
+        return True
+    return False
+
+
 def _media_url(url: str | None) -> str | None:
-    """Возвращает URL медиа, доступный для Telegram. Подменяет localhost на UPLOAD_PUBLIC_BASE_URL при необходимости."""
+    """
+    Возвращает URL медиа, доступный для Telegram (публичный).
+    Логика как в content_plan_sender._ensure_public_media_url:
+    - при заданном public_base: относительный путь → public_base + path;
+    - абсолютный URL с внутренним хостом (localhost, api, minio…) → public_base + path.
+    """
     if not url or not url.strip():
         return None
     u = url.strip()
+    st = settings
+    public_base = None
+    if getattr(st, "use_s3", False) and getattr(st, "s3_public_base_url", None):
+        public_base = (st.s3_public_base_url or "").rstrip("/")
+    if not public_base and getattr(st, "upload_public_base_url", None):
+        public_base = (st.upload_public_base_url or "").rstrip("/")
+    if public_base:
+        if u.startswith("/"):
+            return f"{public_base}{u}"
+        if u.startswith(("http://", "https://")):
+            if u.startswith(public_base):
+                return u
+            try:
+                parsed = urlparse(u)
+                if _is_internal_media_host(parsed.netloc or ""):
+                    path = parsed.path or "/"
+                    query = f"?{parsed.query}" if parsed.query else ""
+                    return f"{public_base}{path}{query}"
+            except Exception as e:
+                logging.warning("Failed to rewrite media URL with public base: %s", e)
     if u.startswith(("http://", "https://")):
-        final = u
-    else:
-        base = (settings.upload_base_url or "").rstrip("/")
-        path = u if u.startswith("/") else f"/{u}"
-        final = f"{base}{path}" if base else None
-    if not final:
-        return None
-    # Telegram не может загрузить файл по localhost — подменяем origin на публичный (хост:порт)
-    public_base = getattr(settings, "upload_public_base_url", None)
-    if public_base and "localhost" in final:
-        try:
-            parsed = urlparse(final)
-            path = parsed.path or "/"
-            query = f"?{parsed.query}" if parsed.query else ""
-            base = public_base.rstrip("/")
-            return f"{base}{path}{query}"
-        except Exception as e:
-            logging.warning("Failed to rewrite media URL with public base: %s", e)
-    return final
+        return u
+    base = (st.upload_base_url or "").rstrip("/")
+    path = u if u.startswith("/") else f"/{u}"
+    return f"{base}{path}" if base else None
 
 
 def _is_video_url(url: str) -> bool:
