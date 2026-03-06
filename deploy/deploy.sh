@@ -13,13 +13,12 @@ if ! docker compose version &>/dev/null; then
 fi
 [ ! -f .env ] && { echo "ERROR: .env not found"; exit 1; }
 
-# Внешний S3: используем standalone compose без MinIO. Иначе — base с MinIO.
+# Внешний S3: standalone compose без MinIO + prod-s3. Иначе — base + prod.
 if [ -f docker-compose.s3-external.yml ] && grep -qE '^S3_ENDPOINT_URL=' .env 2>/dev/null; then
-  COMPOSE="docker compose -f docker-compose.s3-external.yml"
+  COMPOSE="docker compose -f docker-compose.s3-external.yml -f docker-compose.prod-s3.yml"
 else
-  COMPOSE="docker compose -f docker-compose.yml"
+  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 fi
-[ -f docker-compose.prod.yml ] && COMPOSE="$COMPOSE -f docker-compose.prod.yml"
 # BuildKit + кэш: npm/pip кэшируются между сборками
 export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain

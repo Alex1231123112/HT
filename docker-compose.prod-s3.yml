@@ -1,0 +1,17 @@
+# Production override для внешнего S3 (без MinIO)
+# Используется вместе с docker-compose.s3-external.yml
+
+services:
+  frontend:
+    ports:
+      - "80:80"
+
+  api:
+    environment:
+      APP_ENV: prod
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://147.45.96.211}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://147.45.96.211:9000/uploads}
+
+  bot:
+    environment:
+      APP_ENV: prod
