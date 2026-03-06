@@ -29,6 +29,19 @@ cat deploy_key
 # Вставить в SSH_PRIVATE_KEY (включая строки -----BEGIN/END-----)
 ```
 
+**Если SSH timeout (`handshake failed: connection timed out`):**  
+GitHub Actions подключается с IP Microsoft Azure. Если на сервере включён ufw/iptables и порт 22 закрыт для внешних IP — разрешите диапазоны GitHub:
+
+```bash
+# На сервере (root)
+curl -s https://api.github.com/meta | jq -r '.actions[]' | grep -E '^[0-9]' | while read cidr; do
+  ufw allow from "$cidr" to any port 22 comment "GitHub Actions"
+done
+ufw reload
+```
+
+Или временно откройте SSH для всех (менее безопасно): `ufw allow 22/tcp && ufw reload`
+
 Ручной запуск: Actions → CD → Run workflow.
 
 ---

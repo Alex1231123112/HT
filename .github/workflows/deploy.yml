@@ -32,7 +32,7 @@ jobs:
             cd /opt/ht || { echo "ERROR: cd /opt/ht failed"; exit 1; }
             for i in 1 2 3; do
               echo "git fetch attempt $i..."
-              git fetch origin && break
+              timeout 60 git fetch origin && break
               [ $i -eq 3 ] && { echo "ERROR: git fetch failed after 3 attempts"; exit 1; }
               sleep 5
             done
