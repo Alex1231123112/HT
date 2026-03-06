@@ -291,6 +291,7 @@ function PreviewColumn({
 
   return (
     <div
+      className="content-preview-column"
       style={{
         width: previewWidth,
         minWidth: PREVIEW_WIDTH_MIN,
@@ -371,13 +372,14 @@ function FormAndPreviewLayout({
   };
 
   return (
-    <div style={{ ...LAYOUT_WRAPPER_STYLE, minHeight: 460 }}>
-      <div style={FORM_COLUMN_STYLE}>
+    <div className="content-form-preview-layout" style={{ ...LAYOUT_WRAPPER_STYLE, minHeight: 460 }}>
+      <div className="content-form-column" style={FORM_COLUMN_STYLE}>
         <Form {...formProps} layout="vertical">
           {children}
         </Form>
       </div>
       <div
+        className="content-form-preview-resizer"
         role="separator"
         onMouseDown={onResizerMouseDown}
         style={{

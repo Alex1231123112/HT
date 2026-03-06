@@ -197,3 +197,145 @@ textarea {
 }
 .rich-editor-wrap .ql-toolbar button[value="bold"] { font-weight: bold; }
 .rich-editor-wrap .ql-toolbar button[value="italic"] { font-style: italic; }
+
+/* ——— Адаптация под мобильные устройства ——— */
+@media (max-width: 992px) {
+  .container {
+    padding: 16px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .bar-row {
+    grid-template-columns: 70px 1fr 36px;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    font-size: 15px;
+  }
+  /* iOS не увеличивает масштаб при фокусе в поле (если font-size >= 16px) */
+  .ant-input,
+  .ant-input-number input,
+  .ant-picker-input input {
+    font-size: 16px !important;
+  }
+  .container {
+    padding: 12px;
+  }
+  /* Контент layout (Refine + Ant Design) */
+  .ant-layout-content {
+    padding: 12px 8px 16px !important;
+  }
+  .ant-layout-header {
+    padding-inline: 8px 16px !important;
+  }
+  /* Таблицы: горизонтальный скролл, не ломаем страницу */
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-left: -8px;
+    margin-right: -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .ant-table {
+    min-width: 600px;
+  }
+  .ant-table-pagination {
+    flex-wrap: wrap;
+    margin-top: 12px !important;
+  }
+  .ant-pagination-options {
+    margin-top: 8px;
+  }
+  /* Заголовок списка Refine: кнопки под заголовком, без переноса в одну строку */
+  .ant-page-header {
+    flex-wrap: wrap;
+  }
+  .ant-page-header-heading {
+    flex-wrap: wrap;
+  }
+  .ant-page-header-heading-extra {
+    margin-top: 8px;
+    width: 100%;
+  }
+  .ant-page-header-heading-extra .ant-space {
+    flex-wrap: wrap;
+  }
+  /* Кнопки: удобнее для тапа (минимум 44px по высоте) */
+  .ant-btn {
+    min-height: 44px;
+    padding: 8px 14px;
+  }
+  .ant-btn-sm {
+    min-height: 36px;
+    padding: 4px 10px;
+  }
+  /* Формы: на всю ширину */
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+  .ant-input,
+  .ant-input-number,
+  .ant-picker {
+    width: 100% !important;
+  }
+  .ant-select {
+    width: 100% !important;
+    max-width: none !important;
+  }
+  /* Карточки создания/редактирования */
+  .ant-card-body {
+    padding: 16px;
+  }
+  .ant-card-head {
+    padding: 12px 16px;
+  }
+  /* Sider/Drawer: уже обрабатывается Refine на мобильном */
+  .ant-drawer-body {
+    padding: 16px;
+  }
+  .ant-menu-item,
+  .ant-menu-submenu-title {
+    padding: 12px 16px !important;
+    min-height: 48px;
+  }
+  /* Форма контента с превью: колонка на мобильном */
+  .content-form-preview-layout {
+    flex-direction: column;
+  }
+  .content-form-column {
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 16px !important;
+  }
+  .content-form-preview-resizer {
+    width: 100% !important;
+    height: 10px !important;
+    min-height: 10px !important;
+    cursor: row-resize;
+    align-self: stretch;
+  }
+  .content-preview-column {
+    width: 100% !important;
+    min-width: 0 !important;
+    position: static !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .ant-layout-content {
+    padding: 8px 4px 12px !important;
+  }
+  .ant-table {
+    min-width: 500px;
+  }
+  .ant-btn {
+    padding: 10px 12px;
+  }
+  .ant-page-header-heading-title {
+    font-size: 18px;
+  }
+}
