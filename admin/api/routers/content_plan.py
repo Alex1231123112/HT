@@ -87,6 +87,56 @@ async def get_plan(
     return await _plan_to_out(db, plan)
 
 
+@router.get("/{plan_id}/debug")
+async def debug_plan_media(
+    plan_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+) -> dict:
+    """Диагностика: медиа URL плана и проверка доступности."""
+    plan = await db.get(ContentPlan, plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    from admin.api.content_plan_sender import (
+        _ensure_public_media_url,
+        get_item_message,
+        get_plan_message,
+    )
+
+    items = (
+        await db.execute(
+            select(ContentPlanItem).where(ContentPlanItem.plan_id == plan.id).order_by(ContentPlanItem.sort_order)
+        )
+    ).scalars().all()
+    urls: list[dict] = []
+    if items:
+        for row in items:
+            title, _, media_url = await get_item_message(db, row[0])
+            media_url_public = _ensure_public_media_url(media_url)
+            urls.append({"title": title, "url": media_url, "url_public": media_url_public})
+    else:
+        title, _, media_url = await get_plan_message(db, plan)
+        media_url_public = _ensure_public_media_url(media_url)
+        urls.append({"title": title, "url": media_url, "url_public": media_url_public})
+
+    results = []
+    for u in urls:
+        status = "no_url"
+        content_type = None
+        if u["url_public"]:
+            try:
+                import httpx
+
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                    r = await client.head(u["url_public"])
+                    status = str(r.status_code)
+                    content_type = r.headers.get("content-type")
+            except Exception as e:
+                status = f"error: {e}"
+        results.append({**u, "status": status, "content_type": content_type})
+    return {"plan_id": plan_id, "media": results}
+
+
 def _naive_utc(dt: datetime | None) -> datetime | None:
     """Привести datetime к naive UTC для совместимости с PostgreSQL/asyncpg."""
     if dt is None:

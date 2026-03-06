@@ -184,6 +184,15 @@ async def _send_one_message(
     """Отправить одно сообщение (title, description, media) во все каналы из rows. Возвращает (sent_bot, sent_channel, errors)."""
     text = _build_text(title, description)
     media_url_public = _ensure_public_media_url(media_url)
+    if media_url_public:
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                r = await client.head(media_url_public)
+                if r.status_code != 200 or (r.headers.get("content-type") or "").startswith("text/html"):
+                    logger.warning("Media URL unreachable or HTML: %s status=%s ct=%s", media_url_public[:80], r.status_code, r.headers.get("content-type"))
+                    media_url_public = None
+        except Exception as e:
+            logger.warning("Media URL pre-check failed (will try send anyway): %s", e)
     sent_bot = 0
     sent_channel = 0
     errors: list[str] = []
@@ -201,6 +210,12 @@ async def _send_one_message(
             )
         )
 
+    def _is_wrong_type_error(err: str | None) -> bool:
+        return err is not None and (
+            "wrong type of the web page content" in err.lower()
+            or "type of file mismatch" in err.lower()
+        )
+
     for ch in rows:
         if ch.channel_type == DistributionChannelType.BOT:
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
@@ -214,6 +229,14 @@ async def _send_one_message(
                         result, err_msg = await tg.send_photo(
                             bot_token, uid, media_url_public, caption=text, client=telegram_client
                         )
+                    if not result and _is_wrong_type_error(err_msg):
+                        logger.info("send_photo failed (wrong type), trying send_video: %s", media_url_public[:80])
+                        result, err_msg = await tg.send_video(
+                            bot_token, uid, media_url_public, caption=text, client=telegram_client
+                        )
+                    if not result and err_msg:
+                        logger.info("Media failed, sending text only: %s", err_msg[:80] if err_msg else "")
+                        result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
                 else:
                     result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
                 target = f"user:{uid}"
@@ -234,6 +257,14 @@ async def _send_one_message(
                     result, err_msg = await tg.send_photo(
                         bot_token, chat, media_url_public, caption=text, client=telegram_client
                     )
+                if not result and _is_wrong_type_error(err_msg):
+                    logger.info("send_photo failed (wrong type), trying send_video: %s", media_url_public[:80])
+                    result, err_msg = await tg.send_video(
+                        bot_token, chat, media_url_public, caption=text, client=telegram_client
+                    )
+                if not result and err_msg:
+                    logger.info("Media failed, sending text only: %s", err_msg[:80] if err_msg else "")
+                    result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
             else:
                 result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
             target = chat
