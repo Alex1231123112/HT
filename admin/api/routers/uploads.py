@@ -80,9 +80,14 @@ async def upload_file(
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     target = UPLOAD_DIR / safe_name
     target.write_bytes(raw)
-    base_url = (settings.upload_base_url or "").rstrip("/")
-    local_url = f"{base_url}/{safe_name}" if base_url else f"/uploads/{safe_name}"
+    path = f"/uploads/{safe_name}"
+    # В БД сохраняем публичный URL, иначе бот не сможет отдать медиа (Telegram скачивает по URL).
+    if getattr(settings, "upload_public_base_url", None):
+        url = f"{settings.upload_public_base_url.rstrip('/')}{path}"
+    else:
+        base_url = (settings.upload_base_url or "").rstrip("/")
+        url = f"{base_url}{path}" if base_url else path
     return GenericMessage(
         message="uploaded",
-        data={"filename": safe_name, "size": len(raw), "url": local_url},
+        data={"filename": safe_name, "size": len(raw), "url": url},
     )

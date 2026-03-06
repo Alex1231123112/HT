@@ -123,11 +123,22 @@ def _build_text(title: str, description: str) -> str:
     return f"<b>{title}</b>\n\n{description}"[:4096]
 
 
+def _is_internal_media_host(netloc: str) -> bool:
+    """Хост, до которого Telegram с интернета не достучится."""
+    if not netloc:
+        return True
+    host = netloc.split(":")[0].lower()
+    if host in ("localhost", "127.0.0.1", "api", "backend", "app", "minio"):
+        return True
+    if "localhost" in host or host.startswith("127."):
+        return True
+    return False
+
+
 def _ensure_public_media_url(url: str | None) -> str | None:
     """
     Преобразует URL медиа в публичный, доступный для Telegram.
-    - Относительные пути (/uploads/xxx) → полный URL с base
-    - localhost/127.0.0.1 → подмена на публичный base
+    Логика как в bot.utils._media_url: относительные пути и внутренние хосты (api, minio, localhost) → base + path.
     """
     if not url or not url.strip():
         return None
@@ -138,18 +149,22 @@ def _ensure_public_media_url(url: str | None) -> str | None:
         base = st.s3_public_base_url.rstrip("/")
     elif st.upload_public_base_url:
         base = st.upload_public_base_url.rstrip("/")
-    # Относительный путь: /uploads/xxx.jpg → base + path
-    if u.startswith("/") and base:
-        return f"{base}{u}"
-    # localhost/127.0.0.1 → подмена
-    if ("localhost" in u or "127.0.0.1" in u) and base:
+    if not base:
+        return u
+    if u.startswith(("http://", "https://")):
+        if u.startswith(base):
+            return u
         try:
             parsed = urlparse(u)
+            if not _is_internal_media_host(parsed.netloc or ""):
+                return u
             path = parsed.path or "/"
-            return f"{base}{path}"
+            query = f"?{parsed.query}" if parsed.query else ""
+            return f"{base}{path}{query}"
         except Exception:
             return u
-    return u
+    path = u if u.startswith("/") else f"/{u}"
+    return f"{base}{path}"
 
 
 def _is_video_url(url: str) -> bool:
