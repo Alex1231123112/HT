@@ -35,23 +35,33 @@ const readToken = () => localStorage.getItem(TOKEN_KEY) ?? "";
 
 /** Загрузка файла на сервер (локально или S3). Не передаёт Content-Type, чтобы браузер подставил boundary. */
 export async function uploadContentFile(file: File): Promise<{ url: string }> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const token = readToken();
-  const csrf = await getCsrfToken();
-  const headers: HeadersInit = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    "X-CSRF-Token": csrf,
+  const doUpload = async (csrf: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = readToken();
+    const headers: HeadersInit = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "X-CSRF-Token": csrf,
+    };
+    const res = await fetch(`${getApiUrl()}/upload`, { method: "POST", headers, body: formData });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { detail?: string };
+      return { ok: false as const, status: res.status, detail: err.detail ?? `Ошибка: ${res.status}` };
+    }
+    const data = (await res.json()) as { data?: { url?: string; filename?: string } };
+    const url = data.data?.url ?? (data.data?.filename ? `/uploads/${data.data.filename}` : "");
+    if (!url) return { ok: false as const, status: 0, detail: "Нет URL в ответе" };
+    return { ok: true as const, url };
   };
-  const res = await fetch(`${getApiUrl()}/upload`, { method: "POST", headers, body: formData });
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? `Ошибка загрузки: ${res.status}`);
+  let csrf = await getCsrfToken();
+  let result = await doUpload(csrf);
+  if (!result.ok && result.status === 403) {
+    _csrfToken = null;
+    csrf = await getCsrfToken();
+    result = await doUpload(csrf);
   }
-  const data = (await res.json()) as { data?: { url?: string; filename?: string } };
-  const url = data.data?.url ?? (data.data?.filename ? `/uploads/${data.data.filename}` : "");
-  if (!url) throw new Error("Нет URL в ответе");
-  return { url };
+  if (!result.ok) throw new Error(result.detail);
+  return { url: result.url };
 }
 
 const request = async <T = unknown>(path: string, init?: RequestInit, _csrf = false): Promise<T> => {

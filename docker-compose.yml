@@ -103,7 +103,6 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
-
 volumes:
   pg_data:
   minio_data:
