@@ -1,8 +1,12 @@
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api.deps import get_current_admin, require_roles, verify_csrf
+from config.settings import get_settings
 from admin.api.schemas import (
     EventCreate,
     EventOut,
@@ -13,7 +17,23 @@ from admin.api.schemas import (
 from database.models import ActivityLog, AdminUser, Event, EventRegistration, User, UserType
 from database.session import get_db
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/events", tags=["events"])
+
+
+def _naive_utc(dt: datetime | None) -> datetime | None:
+    """Привести datetime к naive UTC для сохранения в БД."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    try:
+        tz = ZoneInfo(get_settings().timezone)
+        return dt.replace(tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
+    except Exception:
+        return dt
 
 
 async def _event_to_out(db: AsyncSession, event: Event) -> EventOut:
@@ -100,12 +120,19 @@ async def create_event(
     db: AsyncSession = Depends(get_db),
     admin: AdminUser = Depends(require_roles("superadmin", "admin", "manager")),
 ) -> EventOut:
-    event = Event(**payload.model_dump())
-    db.add(event)
-    db.add(ActivityLog(admin_id=admin.id, action="create_event", details=f"event={event.title}"))
-    await db.commit()
-    await db.refresh(event)
-    return await _event_to_out(db, event)
+    try:
+        data = payload.model_dump()
+        data["event_date"] = _naive_utc(data["event_date"])
+        event = Event(**data)
+        db.add(event)
+        db.add(ActivityLog(admin_id=admin.id, action="create_event", details=f"event={event.title}"))
+        await db.commit()
+        await db.refresh(event)
+        return await _event_to_out(db, event)
+    except Exception as e:
+        await db.rollback()
+        logger.exception("create_event failed: %s", e)
+        raise
 
 
 @router.put("/{event_id}", response_model=EventOut, dependencies=[Depends(verify_csrf)])
@@ -119,6 +146,8 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     data = payload.model_dump(exclude_unset=True)
+    if "event_date" in data:
+        data["event_date"] = _naive_utc(data["event_date"])
     for key, value in data.items():
         setattr(event, key, value)
     db.add(event)
