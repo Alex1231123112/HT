@@ -153,6 +153,20 @@ def _naive_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+def _sync_status_from_scheduled_at(plan: ContentPlan, now: datetime) -> None:
+    """
+    Статус выводится из даты/времени: если scheduled_at в будущем — «запланирован»,
+    иначе — «черновик». Отправлено/отменено не трогаем.
+    Так план не отправится «сразу» при сохранении, только воркером в указанное время.
+    """
+    if plan.status == ContentPlanStatus.SENT or plan.status == ContentPlanStatus.CANCELLED:
+        return
+    if plan.scheduled_at is not None and plan.scheduled_at > now:
+        plan.status = ContentPlanStatus.SCHEDULED
+    else:
+        plan.status = ContentPlanStatus.DRAFT
+
+
 @router.post("", response_model=ContentPlanOut, dependencies=[Depends(verify_csrf)])
 async def create_plan(
     payload: ContentPlanCreate,
@@ -165,6 +179,7 @@ async def create_plan(
     if data.get("scheduled_at") is not None:
         data["scheduled_at"] = _naive_utc(data["scheduled_at"])
     plan = ContentPlan(**data)
+    _sync_status_from_scheduled_at(plan, datetime.utcnow())
     db.add(plan)
     try:
         await db.flush()
@@ -217,6 +232,7 @@ async def update_plan(
         data["scheduled_at"] = _naive_utc(data["scheduled_at"])
     for k, v in data.items():
         setattr(plan, k, v)
+    _sync_status_from_scheduled_at(plan, datetime.utcnow())
     if payload.channel_ids is not None:
         await db.execute(delete(ContentPlanChannel).where(ContentPlanChannel.plan_id == plan_id))
         for cid in payload.channel_ids:

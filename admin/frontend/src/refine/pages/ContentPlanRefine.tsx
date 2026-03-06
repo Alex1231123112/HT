@@ -342,13 +342,13 @@ function ContentPlanForm({ isEdit = false }: { isEdit?: boolean }) {
         name="scheduled_at"
         getValueProps={(v: string | null) => ({ value: v ? dayjs.utc(v).local() : null })}
         normalize={(v: Dayjs | null) => (v ? v.toISOString() : null)}
-        extra="Для автоматической отправки по времени выберите статус «Запланировано» и сохраните план — воркер отправит в указанное время."
+        extra="Укажите дату и время — статус «Запланировано» выставится автоматически. Отправка произойдёт в указанное время (вручную не нажимайте «Отправить» для запланированных)."
       >
         <DatePicker showTime format="DD.MM.YYYY HH:mm" style={{ width: "100%" }} />
       </Form.Item>
       {isEdit && (
-        <Form.Item label="Статус" name="status">
-          <Select options={statusOptions} />
+        <Form.Item label="Статус" name="status" extra="Определяется по дате отправки: дата в будущем — Запланировано, без даты или в прошлом — Черновик.">
+          <Select options={statusOptions} disabled />
         </Form.Item>
       )}
       <Form.Item
