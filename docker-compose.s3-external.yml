@@ -66,6 +66,8 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
+      # Тот же base, что у API — и контент-план, и бот отдают медиа по этому URL
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
       UPLOAD_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
     depends_on:
       db:

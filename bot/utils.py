@@ -38,8 +38,9 @@ def _media_url(url: str | None) -> str | None:
         return None
     u = url.strip()
     st = settings
+    # Публичный base для медиа (как в API). S3 — без проверки use_s3, у бота нет ключей.
     public_base = None
-    if getattr(st, "use_s3", False) and getattr(st, "s3_public_base_url", None):
+    if getattr(st, "s3_public_base_url", None):
         public_base = (st.s3_public_base_url or "").rstrip("/")
     if not public_base and getattr(st, "upload_public_base_url", None):
         public_base = (st.upload_public_base_url or "").rstrip("/")

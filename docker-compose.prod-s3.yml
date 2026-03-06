@@ -17,5 +17,6 @@ services:
   bot:
     environment:
       APP_ENV: prod
-      # Медиа отдаются с S3 (тот же S3_PUBLIC_BASE_URL)
+      # Медиа с S3 — те же переменные, что у API (контент-план уже грузит фото по этому URL)
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
       UPLOAD_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
