@@ -1,5 +1,6 @@
-# Production override для внешнего S3 (без MinIO)
-# Используется вместе с docker-compose.s3-external.yml
+# Production override для внешнего S3 (без MinIO).
+# Медиа хранятся на S3 (например https://s3.twcstorage.ru).
+# Используется вместе с docker-compose.s3-external.yml при заданном S3_ENDPOINT_URL в .env.
 
 services:
   frontend:
@@ -10,8 +11,11 @@ services:
     environment:
       APP_ENV: prod
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://147.45.96.211}
-      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://147.45.96.211:9000/uploads}
+      # Публичный URL бакета (для Timeweb: https://s3.twcstorage.ru/ИМЯ_БАКЕТА)
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
 
   bot:
     environment:
       APP_ENV: prod
+      # Медиа отдаются с S3 (тот же S3_PUBLIC_BASE_URL)
+      UPLOAD_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}

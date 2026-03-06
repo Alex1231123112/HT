@@ -7,8 +7,23 @@
 | **api** | FastAPI + Uvicorn | Админка API, контент-план, загрузки |
 | **bot** | aiogram | Telegram-бот, polling |
 | **db** | PostgreSQL 15 | База данных |
-| **minio** | MinIO | S3-хранилище для медиа |
+| **minio** | MinIO | S3-хранилище для медиа (опционально) |
 | **frontend** | nginx + React | Статика админки |
+
+### Медиа на Timeweb S3 (s3.twcstorage.ru)
+
+Чтобы хранить загрузки и отдавать медиа с **https://s3.twcstorage.ru**, в `.env` на сервере задайте:
+
+```bash
+S3_ENDPOINT_URL=https://s3.twcstorage.ru
+S3_BUCKET=имя-бакета
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_REGION=ru-1
+S3_PUBLIC_BASE_URL=https://s3.twcstorage.ru/имя-бакета
+```
+
+Деплой при наличии `S3_ENDPOINT_URL` поднимет конфигурацию без MinIO; API и бот будут брать медиа по этому URL.
 
 ---
 
