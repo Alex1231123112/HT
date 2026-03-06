@@ -157,6 +157,65 @@ def _is_video_url(url: str) -> bool:
     return any(lower.endswith(ext) for ext in (".mp4", ".webm", ".mov"))
 
 
+async def _fetch_media_bytes(url: str) -> tuple[bytes | None, str, str]:
+    """
+    Скачать медиа по URL. Возвращает (bytes, filename, content_type) или (None, "", "").
+    Для нашего S3 использует boto3 (работает с приватным bucket).
+    """
+    if not url or not url.strip():
+        return None, "", ""
+    url = url.strip()
+    st = get_settings()
+    # Наш S3: используем boto3 (работает даже с приватным bucket)
+    if st.use_s3 and st.s3_public_base_url and url.startswith(st.s3_public_base_url.rstrip("/")):
+        try:
+            import asyncio
+            import boto3
+            from botocore.config import Config
+
+            prefix = st.s3_public_base_url.rstrip("/") + "/"
+            key = url[len(prefix):] if url.startswith(prefix) else url.split("/", 3)[-1]
+            bucket = st.s3_bucket or ""
+            config = Config(signature_version="s3v4", s3={"addressing_style": "path"})
+            client_kw = {
+                "service_name": "s3",
+                "aws_access_key_id": st.s3_access_key_id,
+                "aws_secret_access_key": st.s3_secret_access_key,
+                "config": config,
+            }
+            if st.s3_region:
+                client_kw["region_name"] = st.s3_region
+            if st.s3_endpoint_url:
+                client_kw["endpoint_url"] = st.s3_endpoint_url
+
+            def _get():
+                c = boto3.client(**client_kw)
+                obj = c.get_object(Bucket=bucket, Key=key)
+                return obj["Body"].read(), obj.get("ContentType") or "application/octet-stream"
+
+            loop = asyncio.get_running_loop()
+            body, ct = await loop.run_in_executor(None, _get)
+            filename = key.split("/")[-1] if "/" in key else key
+            return body, filename, ct
+        except Exception as e:
+            logger.warning("S3 fetch failed for %s: %s", url[:80], e)
+            return None, "", ""
+    # Внешний URL: HTTP GET
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                return None, "", ""
+            ct = (r.headers.get("content-type") or "application/octet-stream").split(";")[0].strip()
+            if "text/html" in ct:
+                return None, "", ""
+            filename = url.split("/")[-1].split("?")[0] or "photo.jpg"
+            return r.content, filename, ct
+    except Exception as e:
+        logger.warning("HTTP fetch failed for %s: %s", url[:80], e)
+        return None, "", ""
+
+
 def _normalize_channel_ref(ref: str) -> str:
     """Из ссылки t.me/username или telegram.me/username извлекает @username. Иначе возвращает ref как есть."""
     ref = (ref or "").strip()
@@ -225,29 +284,52 @@ async def _send_one_message(
             or "type of file mismatch" in err.lower()
         )
 
+    async def _send_media(chat_id: str | int, is_video: bool) -> tuple[bool, str | None]:
+        """Отправить медиа: сначала по URL, при ошибке — скачать и отправить файлом."""
+        if not media_url_public:
+            return False, None
+        if is_video:
+            result, err = await tg.send_video(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+        else:
+            result, err = await tg.send_photo(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+        if result:
+            return True, None
+        if _is_wrong_type_error(err) and not is_video:
+            result, err = await tg.send_video(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+            if result:
+                return True, None
+        # Fallback: скачать и отправить файлом (работает с приватным S3)
+        logger.info("URL send failed, trying fetch+send: %s", err[:60] if err else "")
+        body, fname, ct = await _fetch_media_bytes(media_url_public)
+        if body and len(body) > 0:
+            if is_video or _is_video_url(media_url_public):
+                result, err = await tg.send_video_by_bytes(
+                    bot_token, chat_id, body, fname or "video.mp4", ct or "video/mp4",
+                    caption=text, client=telegram_client
+                )
+            else:
+                result, err = await tg.send_photo_by_bytes(
+                    bot_token, chat_id, body, fname or "photo.jpg", ct or "image/jpeg",
+                    caption=text, client=telegram_client
+                )
+            if result:
+                return True, None
+        return False, err
+
     for ch in rows:
         if ch.channel_type == DistributionChannelType.BOT:
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
             for uid in users:
                 if media_url_public:
-                    if _is_video_url(media_url_public):
-                        result, err_msg = await tg.send_video(
-                            bot_token, uid, media_url_public, caption=text, client=telegram_client
-                        )
+                    ok, err_msg = await _send_media(uid, _is_video_url(media_url_public))
+                    if not ok:
+                        txt_resp, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                        result = txt_resp is not None
                     else:
-                        result, err_msg = await tg.send_photo(
-                            bot_token, uid, media_url_public, caption=text, client=telegram_client
-                        )
-                    if not result and _is_wrong_type_error(err_msg):
-                        logger.info("send_photo failed (wrong type), trying send_video: %s", media_url_public[:80])
-                        result, err_msg = await tg.send_video(
-                            bot_token, uid, media_url_public, caption=text, client=telegram_client
-                        )
-                    if not result and err_msg:
-                        logger.info("Media failed, sending text only: %s", err_msg[:80] if err_msg else "")
-                        result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                        result = True
                 else:
-                    result, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                    txt_resp, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                    result = txt_resp is not None
                 target = f"user:{uid}"
                 if result:
                     sent_bot += 1
@@ -258,24 +340,15 @@ async def _send_one_message(
         elif ch.channel_type == DistributionChannelType.TELEGRAM_CHANNEL and ch.telegram_ref:
             chat = _normalize_channel_ref(ch.telegram_ref)
             if media_url_public:
-                if _is_video_url(media_url_public):
-                    result, err_msg = await tg.send_video(
-                        bot_token, chat, media_url_public, caption=text, client=telegram_client
-                    )
+                ok, err_msg = await _send_media(chat, _is_video_url(media_url_public))
+                if not ok:
+                    txt_resp, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+                    result = txt_resp is not None
                 else:
-                    result, err_msg = await tg.send_photo(
-                        bot_token, chat, media_url_public, caption=text, client=telegram_client
-                    )
-                if not result and _is_wrong_type_error(err_msg):
-                    logger.info("send_photo failed (wrong type), trying send_video: %s", media_url_public[:80])
-                    result, err_msg = await tg.send_video(
-                        bot_token, chat, media_url_public, caption=text, client=telegram_client
-                    )
-                if not result and err_msg:
-                    logger.info("Media failed, sending text only: %s", err_msg[:80] if err_msg else "")
-                    result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+                    result = True
             else:
-                result, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+                txt_resp, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+                result = txt_resp is not None
             target = chat
             if result:
                 sent_channel += 1
