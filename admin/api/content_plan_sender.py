@@ -58,63 +58,88 @@ def _content_type_value(ct: Any) -> str:
     return ct.value if hasattr(ct, "value") else ct
 
 
-async def get_plan_message(db: AsyncSession, plan: ContentPlan) -> tuple[str, str, str | None]:
+def _event_registration_reply_markup(event_id: int) -> dict:
+    """Кнопка «Записаться» под мероприятием (callback_data как в боте)."""
+    return {
+        "inline_keyboard": [
+            [{"text": "✅ Записаться", "callback_data": f"event_reg_{event_id}"}],
+        ],
+    }
+
+
+async def get_plan_message(db: AsyncSession, plan: ContentPlan) -> tuple[str, str, str | None, int | None]:
     """
-    Возвращает (title, description, media_url) для плана.
-    Загружает контент по content_type/content_id или использует custom_*.
+    Возвращает (title, description, media_url, event_id) для плана.
+    event_id не None только когда content_type == event и content_id задан.
     """
     if plan.content_type == "custom" or _content_type_value(plan.content_type) == "custom":
         return (
             _escape(plan.custom_title) or "Рассылка",
             _normalize_html_for_telegram(plan.custom_description) or "",
             plan.custom_media_url.strip() if plan.custom_media_url else None,
+            None,
         )
     if not plan.content_id:
-        return (_escape(plan.title), "", None)
+        return (_escape(plan.title), "", None, None)
     model_map = {
         "promotion": Promotion,
         "news": News,
         "delivery": Delivery,
         "event": Event,
     }
-    model = model_map.get(_content_type_value(plan.content_type))
+    ct = _content_type_value(plan.content_type)
+    model = model_map.get(ct)
     if not model:
-        return (_escape(plan.title), "", None)
+        return (_escape(plan.title), "", None, None)
     item = await db.get(model, plan.content_id)
     if not item:
-        return (_escape(plan.title), "", None)
+        return (_escape(plan.title), "", None, None)
     title = getattr(item, "title", None) or plan.title
     desc = getattr(item, "description", None) or ""
     media = getattr(item, "image_url", None)
-    return (_escape(title), _normalize_html_for_telegram(desc), (media.strip() if media else None) or None)
+    event_id = int(plan.content_id) if ct == "event" else None
+    return (
+        _escape(title),
+        _normalize_html_for_telegram(desc),
+        (media.strip() if media else None) or None,
+        event_id,
+    )
 
 
-async def get_item_message(db: AsyncSession, item: ContentPlanItem) -> tuple[str, str, str | None]:
-    """Возвращает (title, description, media_url) для одного пункта плана (ContentPlanItem)."""
+async def get_item_message(db: AsyncSession, item: ContentPlanItem) -> tuple[str, str, str | None, int | None]:
+    """Возвращает (title, description, media_url, event_id) для одного пункта плана. event_id не None только для типа event."""
     if _content_type_value(item.content_type) == "custom":
         return (
             _escape(item.custom_title) or "Сообщение",
             _normalize_html_for_telegram(item.custom_description) or "",
             item.custom_media_url.strip() if item.custom_media_url else None,
+            None,
         )
     if not item.content_id:
-        return (_escape(item.custom_title) or "Сообщение", "", None)
+        return (_escape(item.custom_title) or "Сообщение", "", None, None)
+    ct = _content_type_value(item.content_type)
     model_map = {
         "promotion": Promotion,
         "news": News,
         "delivery": Delivery,
         "event": Event,
     }
-    model = model_map.get(_content_type_value(item.content_type))
+    model = model_map.get(ct)
     if not model:
-        return (_escape(item.custom_title) or "Сообщение", "", None)
+        return (_escape(item.custom_title) or "Сообщение", "", None, None)
     entity = await db.get(model, item.content_id)
     if not entity:
-        return (_escape(item.custom_title) or "Сообщение", "", None)
+        return (_escape(item.custom_title) or "Сообщение", "", None, None)
     title = getattr(entity, "title", None) or item.custom_title or "Сообщение"
     desc = getattr(entity, "description", None) or ""
     media = getattr(entity, "image_url", None)
-    return (_escape(title), _normalize_html_for_telegram(desc), (media.strip() if media else None) or None)
+    event_id = int(item.content_id) if ct == "event" else None
+    return (
+        _escape(title),
+        _normalize_html_for_telegram(desc),
+        (media.strip() if media else None) or None,
+        event_id,
+    )
 
 
 def _build_text(title: str, description: str) -> str:
@@ -273,13 +298,15 @@ async def _send_one_message(
     description: str,
     media_url: str | None,
     *,
+    event_id: int | None = None,
     plan_id: int,
     plan_title: str,
     admin_id: int | None = None,
     telegram_client: httpx.AsyncClient | None = None,
 ) -> tuple[int, int, list[str]]:
-    """Отправить одно сообщение (title, description, media) во все каналы из rows. Возвращает (sent_bot, sent_channel, errors)."""
+    """Отправить одно сообщение (title, description, media) во все каналы из rows. Если event_id задан — под сообщением кнопка «Записаться»."""
     text = _build_text(title, description)
+    reply_markup = _event_registration_reply_markup(event_id) if event_id is not None else None
     media_url_public = _ensure_public_media_url(media_url)
     kind = _media_kind(media_url or media_url_public or "", "")
     if media_url_public:
@@ -322,15 +349,23 @@ async def _send_one_message(
         if not media_url_public:
             return False, None
         if kind == "video":
-            result, err = await tg.send_video(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+            result, err = await tg.send_video(
+                bot_token, chat_id, media_url_public, caption=text, reply_markup=reply_markup, client=telegram_client
+            )
         elif kind == "photo":
-            result, err = await tg.send_photo(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+            result, err = await tg.send_photo(
+                bot_token, chat_id, media_url_public, caption=text, reply_markup=reply_markup, client=telegram_client
+            )
         else:
-            result, err = await tg.send_document(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+            result, err = await tg.send_document(
+                bot_token, chat_id, media_url_public, caption=text, reply_markup=reply_markup, client=telegram_client
+            )
         if result:
             return True, None
         if _is_wrong_type_error(err) and kind == "photo":
-            result, err = await tg.send_video(bot_token, chat_id, media_url_public, caption=text, client=telegram_client)
+            result, err = await tg.send_video(
+                bot_token, chat_id, media_url_public, caption=text, reply_markup=reply_markup, client=telegram_client
+            )
             if result:
                 return True, None
         # Fallback: скачать и отправить файлом (работает с приватным S3 и любым типом)
@@ -340,17 +375,17 @@ async def _send_one_message(
             if kind == "video":
                 result, err = await tg.send_video_by_bytes(
                     bot_token, chat_id, body, fname or "video.mp4", ct or "video/mp4",
-                    caption=text, client=telegram_client
+                    caption=text, reply_markup=reply_markup, client=telegram_client
                 )
             elif kind == "photo":
                 result, err = await tg.send_photo_by_bytes(
                     bot_token, chat_id, body, fname or "photo.jpg", ct or "image/jpeg",
-                    caption=text, client=telegram_client
+                    caption=text, reply_markup=reply_markup, client=telegram_client
                 )
             else:
                 result, err = await tg.send_document_by_bytes(
                     bot_token, chat_id, body, fname or "document.bin",
-                    caption=text, client=telegram_client
+                    caption=text, reply_markup=reply_markup, client=telegram_client
                 )
             if result:
                 return True, None
@@ -363,12 +398,16 @@ async def _send_one_message(
                 if media_url_public:
                     ok, err_msg = await _send_media(uid)
                     if not ok:
-                        txt_resp, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                        txt_resp, err_msg = await tg.send_text(
+                            bot_token, uid, text, reply_markup=reply_markup, client=telegram_client
+                        )
                         result = txt_resp is not None
                     else:
                         result = True
                 else:
-                    txt_resp, err_msg = await tg.send_text(bot_token, uid, text, client=telegram_client)
+                    txt_resp, err_msg = await tg.send_text(
+                        bot_token, uid, text, reply_markup=reply_markup, client=telegram_client
+                    )
                     result = txt_resp is not None
                 target = f"user:{uid}"
                 if result:
@@ -382,12 +421,16 @@ async def _send_one_message(
             if media_url_public:
                 ok, err_msg = await _send_media(chat)
                 if not ok:
-                    txt_resp, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+                    txt_resp, err_msg = await tg.send_text(
+                        bot_token, chat, text, reply_markup=reply_markup, client=telegram_client
+                    )
                     result = txt_resp is not None
                 else:
                     result = True
             else:
-                txt_resp, err_msg = await tg.send_text(bot_token, chat, text, client=telegram_client)
+                txt_resp, err_msg = await tg.send_text(
+                    bot_token, chat, text, reply_markup=reply_markup, client=telegram_client
+                )
                 result = txt_resp is not None
             target = chat
             if result:
@@ -442,18 +485,18 @@ async def send_plan_to_telegram(
         # Несколько сообщений в плане: отправляем по порядку
         for row in items:
             item_entity = row[0]
-            title, description, media_url = await get_item_message(db, item_entity)
+            title, description, media_url, event_id = await get_item_message(db, item_entity)
             sb, sc, errs = await _send_one_message(
-                db, bot_token, rows, title, description, media_url, **send_kw
+                db, bot_token, rows, title, description, media_url, event_id=event_id, **send_kw
             )
             sent_bot += sb
             sent_channel += sc
             errors.extend(errs)
     else:
         # Одно сообщение из полей плана (как раньше)
-        title, description, media_url = await get_plan_message(db, plan)
+        title, description, media_url, event_id = await get_plan_message(db, plan)
         sent_bot, sent_channel, errors = await _send_one_message(
-            db, bot_token, rows, title, description, media_url, **send_kw
+            db, bot_token, rows, title, description, media_url, event_id=event_id, **send_kw
         )
 
     return {"sent_bot": sent_bot, "sent_channel": sent_channel, "errors": errors, "channels_count": channels_count}

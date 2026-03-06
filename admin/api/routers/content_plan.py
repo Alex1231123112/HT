@@ -112,11 +112,11 @@ async def debug_plan_media(
     urls: list[dict] = []
     if items:
         for row in items:
-            title, _, media_url = await get_item_message(db, row[0])
+            title, _, media_url, _ = await get_item_message(db, row[0])
             media_url_public = _ensure_public_media_url(media_url)
             urls.append({"title": title, "url": media_url, "url_public": media_url_public})
     else:
-        title, _, media_url = await get_plan_message(db, plan)
+        title, _, media_url, _ = await get_plan_message(db, plan)
         media_url_public = _ensure_public_media_url(media_url)
         urls.append({"title": title, "url": media_url, "url_public": media_url_public})
 

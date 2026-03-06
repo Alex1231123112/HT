@@ -3,6 +3,7 @@
 Используется для рассылки в бот (подписчикам) и в каналы.
 В тестах можно подставить mock-клиент и проверять вызовы.
 """
+import json
 import logging
 from typing import Any
 
@@ -20,11 +21,14 @@ async def send_text(
     text: str,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить текстовое сообщение в чат/канал. Возвращает (response_data, None) при успехе или (None, error_message)."""
     url = f"{TELEGRAM_API}/bot{bot_token}/sendMessage"
     payload: dict[str, Any] = {"chat_id": chat_id, "text": text[:4096], "parse_mode": parse_mode}
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
         async with httpx.AsyncClient(timeout=30.0) as c:
             return await _post(c, url, payload)
@@ -38,6 +42,7 @@ async def send_photo(
     caption: str | None = None,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить фото по URL в чат/канал. Возвращает (response_data, None) при успехе или (None, error_message)."""
@@ -46,6 +51,8 @@ async def send_photo(
     if caption:
         payload["caption"] = caption[:1024]
         payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
         async with httpx.AsyncClient(timeout=30.0) as c:
             return await _post(c, url, payload)
@@ -59,6 +66,7 @@ async def send_video(
     caption: str | None = None,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить видео по URL в чат/канал. Возвращает (response_data, None) при успехе или (None, error_message)."""
@@ -67,6 +75,8 @@ async def send_video(
     if caption:
         payload["caption"] = caption[:1024]
         payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
         async with httpx.AsyncClient(timeout=60.0) as c:
             return await _post(c, url, payload)
@@ -82,6 +92,7 @@ async def send_photo_by_bytes(
     caption: str | None = None,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить фото как файл (multipart). Работает когда URL недоступен для Telegram."""
@@ -90,6 +101,8 @@ async def send_photo_by_bytes(
     if caption:
         data["caption"] = caption[:1024]
         data["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        data["reply_markup"] = json.dumps(reply_markup)
     files = {"photo": (filename, file_bytes, content_type)}
     return await _post_multipart(client, api_url, data, files)
 
@@ -103,6 +116,7 @@ async def send_video_by_bytes(
     caption: str | None = None,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить видео как файл (multipart). Работает когда URL недоступен для Telegram."""
@@ -111,6 +125,8 @@ async def send_video_by_bytes(
     if caption:
         data["caption"] = caption[:1024]
         data["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        data["reply_markup"] = json.dumps(reply_markup)
     files = {"video": (filename, file_bytes, content_type)}
     return await _post_multipart(client, api_url, data, files, timeout=60.0)
 
@@ -122,6 +138,7 @@ async def send_document(
     caption: str | None = None,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить документ по URL в чат/канал."""
@@ -130,6 +147,8 @@ async def send_document(
     if caption:
         payload["caption"] = caption[:1024]
         payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
         async with httpx.AsyncClient(timeout=60.0) as c:
             return await _post(c, url, payload)
@@ -144,6 +163,7 @@ async def send_document_by_bytes(
     caption: str | None = None,
     parse_mode: str = PARSE_MODE_HTML,
     *,
+    reply_markup: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Отправить документ как файл (multipart)."""
@@ -152,6 +172,8 @@ async def send_document_by_bytes(
     if caption:
         data["caption"] = caption[:1024]
         data["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        data["reply_markup"] = json.dumps(reply_markup)
     files = {"document": (filename, file_bytes, "application/octet-stream")}
     return await _post_multipart(client, api_url, data, files, timeout=60.0)
 
