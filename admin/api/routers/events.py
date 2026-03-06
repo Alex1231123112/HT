@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -6,7 +7,6 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api.deps import get_current_admin, require_roles, verify_csrf
-from config.settings import get_settings
 from admin.api.schemas import (
     EventCreate,
     EventOut,
@@ -14,10 +14,10 @@ from admin.api.schemas import (
     EventUpdate,
     GenericMessage,
 )
+from config.settings import get_settings
 from database.models import ActivityLog, AdminUser, Event, EventRegistration, User, UserType
 from database.session import get_db
 
-import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/events", tags=["events"])
