@@ -30,7 +30,12 @@ jobs:
           script: |
             echo "=== SSH connected ==="
             cd /opt/ht || { echo "ERROR: cd /opt/ht failed"; exit 1; }
-            git fetch origin || { echo "ERROR: git fetch failed"; exit 1; }
+            for i in 1 2 3; do
+              echo "git fetch attempt $i..."
+              git fetch origin && break
+              [ $i -eq 3 ] && { echo "ERROR: git fetch failed after 3 attempts"; exit 1; }
+              sleep 5
+            done
             git reset --hard origin/main
             chmod +x deploy/deploy.sh
             ./deploy/deploy.sh
