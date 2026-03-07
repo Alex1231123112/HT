@@ -101,11 +101,11 @@ def test_content_plan_send_to_bot_and_channel_mocked(api_client):
     send_text_calls = []
     send_photo_calls = []
 
-    async def mock_send_text(bot_token, chat_id, text, parse_mode=None, *, client=None):
+    async def mock_send_text(bot_token, chat_id, text, parse_mode=None, *, reply_markup=None, client=None):
         send_text_calls.append({"chat_id": chat_id, "text": text})
         return ({"ok": True}, None)
 
-    async def mock_send_photo(bot_token, chat_id, photo_url, caption=None, parse_mode=None, *, client=None):
+    async def mock_send_photo(bot_token, chat_id, photo_url, caption=None, parse_mode=None, *, reply_markup=None, client=None):
         send_photo_calls.append({"chat_id": chat_id, "caption": caption, "photo_url": photo_url})
         return ({"ok": True}, None)
 
