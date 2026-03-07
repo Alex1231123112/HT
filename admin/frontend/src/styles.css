@@ -7,6 +7,8 @@ body {
   font-family: Arial, sans-serif;
   background: #f3f4f6;
   color: #111827;
+  /* Safe area для устройств с вырезом (iPhone X+) */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .container {
@@ -230,11 +232,17 @@ textarea {
   }
   .ant-layout-header {
     padding-inline: 8px 16px !important;
+    flex-wrap: wrap;
   }
-  /* Таблицы: горизонтальный скролл, не ломаем страницу */
+  .ant-page-header-heading-title {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  /* Таблицы: горизонтальный скролл, плавный на iOS */
   .ant-table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
     margin-left: -8px;
     margin-right: -8px;
     padding-left: 8px;
@@ -311,17 +319,40 @@ textarea {
     max-width: none !important;
     padding: 16px !important;
   }
+  /* Скрыть ресайзер — на тач-устройствах не работает, layout фиксирован */
   .content-form-preview-resizer {
-    width: 100% !important;
-    height: 10px !important;
-    min-height: 10px !important;
-    cursor: row-resize;
-    align-self: stretch;
+    display: none !important;
   }
   .content-preview-column {
     width: 100% !important;
     min-width: 0 !important;
     position: static !important;
+  }
+  /* Превью iframe: меньше высота на мобильном */
+  .content-preview-column iframe {
+    min-height: 320px !important;
+    height: 320px !important;
+  }
+  /* Quill: горизонтальный скролл тулбара при переполнении */
+  .rich-editor-wrap .ql-toolbar.ql-snow {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  /* Form.List: вторая кнопка добавления — под первой на мобильном */
+  .ant-form-item .ant-btn-dashed + .ant-btn-dashed {
+    margin-left: 0 !important;
+    margin-top: 8px;
+  }
+  /* Нативные кнопки (Dashboard, Analytics): удобный тап */
+  .card button,
+  .row button {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+  /* Select multiple: компактнее на мобильном */
+  .ant-select-selector {
+    min-height: 44px !important;
   }
 }
 
@@ -337,5 +368,18 @@ textarea {
   }
   .ant-page-header-heading-title {
     font-size: 18px;
+  }
+  /* Dashboard: bar-row в колонку на очень узких экранах */
+  .bar-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  /* Карточки: меньше отступы */
+  .card {
+    padding: 10px;
+  }
+  /* Login: компактнее на очень маленьких экранах */
+  .login-page {
+    padding: 12px !important;
   }
 }
