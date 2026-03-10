@@ -11,7 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 
 from admin.api.content_plan_sender import process_due_content_plans
-from admin.api.s3_cleanup import run_daily_s3_cleanup
 from admin.api.routers.admins import router as admins_router
 from admin.api.routers.analytics import router as analytics_router
 from admin.api.routers.auth import router as auth_router
@@ -26,6 +25,7 @@ from admin.api.routers.managers import router as managers_router
 from admin.api.routers.settings import router as settings_router
 from admin.api.routers.uploads import router as uploads_router
 from admin.api.routers.users import router as users_router
+from admin.api.s3_cleanup import run_daily_s3_cleanup
 from admin.api.schemas import GenericMessage
 from admin.api.security import clear_revoked_tokens
 from config.logging import configure_logging
