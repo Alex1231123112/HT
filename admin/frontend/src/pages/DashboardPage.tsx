@@ -25,9 +25,14 @@ export function DashboardPage() {
     url: "/dashboard/activity",
     method: "get",
   });
+  const { result: scheduledResp } = useCustom<{ tasks: Record<string, { last_run: string | null; success_count: number; error_count: number; running: boolean }> }>({
+    url: "/scheduled-tasks",
+    method: "get",
+  });
   const stats = statsResp?.data;
   const usersChart = statsResp ? (chartResp?.data?.daily_growth ?? []) : [];
   const logs = activityResp?.data?.items ?? [];
+  const scheduledTasks = scheduledResp?.data?.tasks ?? {};
 
   return (
     <>
@@ -63,6 +68,21 @@ export function DashboardPage() {
           <button onClick={() => navigate("/promotions")}>Новая акция</button>
           <button onClick={() => navigate("/analytics")}>Отчет</button>
           <button onClick={() => navigate("/users")}>Экспорт пользователей</button>
+        </div>
+      </section>
+
+      <section className="card">
+        <h3>Периодические задачи</h3>
+        <div className="grid-form">
+          {Object.entries(scheduledTasks).map(([name, t]) => (
+            <div key={name} className="row">
+              <span>{name === "content_plan" ? "Content Plan" : "S3 Cleanup"}</span>
+              <span>{t.running ? "Работает" : "Остановлен"}</span>
+              <span>Последний запуск: {t.last_run ?? "—"}</span>
+              <span>OK: {t.success_count}</span>
+              <span>Ошибок: {t.error_count}</span>
+            </div>
+          ))}
         </div>
       </section>
 
