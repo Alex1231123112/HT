@@ -19,6 +19,10 @@ if [ -f docker-compose.s3-external.yml ] && grep -qE '^S3_ENDPOINT_URL=' .env 2>
 else
   COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 fi
+# Мониторинг: Prometheus + Grafana (если ENABLE_MONITORING=1 в .env)
+if grep -qE '^ENABLE_MONITORING=1' .env 2>/dev/null; then
+  COMPOSE="$COMPOSE -f docker-compose.monitoring.yml"
+fi
 # BuildKit + кэш: npm/pip кэшируются между сборками
 export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain
@@ -57,7 +61,7 @@ $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: hea
 
 echo "=== Applying CPU/memory limits ==="
 set +e
-for svc in api bot frontend db minio; do
+for svc in api bot frontend db minio prometheus grafana; do
   cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
   if [ -n "$cid" ]; then
     case $svc in
@@ -66,6 +70,8 @@ for svc in api bot frontend db minio; do
       frontend) docker update --cpus=0.5 --memory=96m "$cid" 2>/dev/null ;;
       db)    docker update --cpus=1 --memory=512m "$cid" 2>/dev/null ;;
       minio) docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null ;;
+      prometheus) docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null ;;
+      grafana) docker update --cpus=0.25 --memory=128m "$cid" 2>/dev/null ;;
     esac
   fi
 done

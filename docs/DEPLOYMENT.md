@@ -16,6 +16,14 @@
    - Работает вход в админ-панель
    - Бот отвечает на `/start` и `/help`
 
+## Мониторинг (Prometheus + Grafana)
+- Добавьте в `.env`: `ENABLE_MONITORING=1`
+- Задайте `GRAFANA_ADMIN_PASSWORD` (по умолчанию `admin`).
+- При деплое поднимутся Prometheus (порт 9090) и Grafana (порт 3000).
+- Grafana: логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD`. Datasource Prometheus уже настроен.
+- Дашборд «HT: Периодические задачи» — метрики content_plan и s3_cleanup.
+- Локально: `docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d`
+
 ## Резервные копии
 - Ежедневный backup БД: `./deploy/backup_db.ps1`.
 - Проверка восстановления раз в неделю: `./deploy/restore_db.ps1 -InputFile backup.sql`.
