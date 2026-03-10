@@ -10,7 +10,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 128M
+          memory: 96M
 
   api:
     environment:
@@ -22,7 +22,7 @@ services:
       resources:
         limits:
           cpus: "1"
-          memory: 512M
+          memory: 384M
 
   bot:
     environment:
@@ -35,11 +35,11 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 192M
 
   db:
     deploy:
       resources:
         limits:
           cpus: "1"
-          memory: 512M
+          memory: 384M
