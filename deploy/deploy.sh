@@ -32,6 +32,22 @@ echo "=== Stopping old containers ==="
 $COMPOSE down 2>/dev/null || true
 echo "=== Starting containers ==="
 $COMPOSE up -d
-sleep 5
+
+# Ждём готовности API (до 90 сек)
+echo "=== Waiting for API health ==="
+i=0
+while [ $i -lt 18 ]; do
+  if $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health >/dev/null 2>&1; then
+    echo "API ready"
+    break
+  fi
+  i=$((i + 1))
+  [ $i -eq 18 ] && { echo "ERROR: API health check timeout"; exit 1; }
+  sleep 5
+done
+
 $COMPOSE exec -T api alembic upgrade head
-echo "=== Done [$(date '+%H:%M:%S')]. Check: curl http://localhost:8000/health ==="
+echo "=== Verifying deploy ==="
+$COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: health check failed after deploy"; exit 1; }
+echo "=== Done [$(date '+%H:%M:%S')]. API OK ==="
+[[ "$*" != *"--no-prune"* ]] && docker image prune -f --filter "until=24h" 2>/dev/null || true

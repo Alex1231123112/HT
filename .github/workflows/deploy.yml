@@ -1,8 +1,6 @@
 name: CD
 
 on:
-  push:
-    branches: [main]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -12,9 +10,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # При push в main — всегда деплоим. При workflow_run — только если CI успешен.
+    # Деплой только после успешного CI (или вручную). Push в main больше не триггерит деплой напрямую.
     if: |
-      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
