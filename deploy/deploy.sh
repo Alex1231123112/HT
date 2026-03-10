@@ -33,6 +33,20 @@ $COMPOSE down 2>/dev/null || true
 echo "=== Starting containers ==="
 $COMPOSE up -d
 
+# Лимиты CPU/памяти для standalone (deploy.resources работает только в Swarm)
+for svc in api bot frontend db minio; do
+  cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
+  if [ -n "$cid" ]; then
+    case $svc in
+      api)   docker update --cpus=1 --memory=512m "$cid" 2>/dev/null || true ;;
+      bot)   docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null || true ;;
+      frontend) docker update --cpus=0.5 --memory=128m "$cid" 2>/dev/null || true ;;
+      db)    docker update --cpus=1 --memory=512m "$cid" 2>/dev/null || true ;;
+      minio) docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null || true ;;
+    esac
+  fi
+done
+
 # Ждём готовности API (до 90 сек)
 echo "=== Waiting for API health ==="
 i=0

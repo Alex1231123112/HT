@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     mailing_send_window_end_hour: int = Field(default=21, alias="MAILING_SEND_WINDOW_END_HOUR")
     mailing_min_audience: int = Field(default=3, alias="MAILING_MIN_AUDIENCE")
     mailing_min_interval_minutes: int = Field(default=60, alias="MAILING_MIN_INTERVAL_MINUTES")
-    content_plan_check_interval_seconds: int = Field(default=30, alias="CONTENT_PLAN_CHECK_INTERVAL_SECONDS")
+    content_plan_check_interval_seconds: int = Field(default=60, alias="CONTENT_PLAN_CHECK_INTERVAL_SECONDS")
     bot_token: str = Field(default="123456:TEST_TOKEN", alias="BOT_TOKEN")
     manager_username: str = Field(default="manager_username", alias="MANAGER_USERNAME")
     admin_default_username: str = Field(default="admin", alias="ADMIN_DEFAULT_USERNAME")

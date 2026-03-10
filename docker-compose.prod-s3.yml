@@ -6,6 +6,11 @@ services:
   frontend:
     ports:
       - "80:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   api:
     environment:
@@ -13,6 +18,11 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://147.45.96.211}
       # Публичный URL бакета (для Timeweb: https://s3.twcstorage.ru/ИМЯ_БАКЕТА)
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   bot:
     environment:
@@ -21,3 +31,15 @@ services:
       UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://api:8000}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
       UPLOAD_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  db:
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M

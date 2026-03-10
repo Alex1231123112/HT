@@ -1,25 +1,49 @@
-# Production override: порты, отключение консоли MinIO, prod-переменные
+# Production override: порты, лимиты CPU/памяти, prod-переменные
 services:
   frontend:
     ports:
       - "80:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   minio:
     ports:
       - "9000:9000"
     # Порт 9001 (консоль MinIO) не пробрасываем — не открывать наружу
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   api:
     environment:
       APP_ENV: prod
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://147.45.96.211}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://147.45.96.211:9000/uploads}
-    # В prod можно убрать volume с исходниками — использовать только образ
-    # volumes: []
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   bot:
     environment:
       APP_ENV: prod
-      # Бот качает медиа по api:8000 (внутри сети), затем шлёт файлом в Telegram
       UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://api:8000}
       UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL:-http://147.45.96.211:8000}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  db:
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M

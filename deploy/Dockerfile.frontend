@@ -7,6 +7,9 @@ COPY admin/frontend/package.json admin/frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci 2>/dev/null || npm install
 COPY admin/frontend .
+# Ограничение CPU при сборке: меньше параллельных потоков
+ENV UV_THREADPOOL_SIZE=2
+ENV NODE_OPTIONS="--max-old-space-size=512"
 RUN npm run build
 
 FROM nginx:stable-alpine
