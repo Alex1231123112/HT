@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { Button, Form, Input, Modal, Select, Space } from "antd";
+import React, { useRef, useState, useMemo, useEffect } from "react";
+import { Button, Form, Input, Modal, Popover, Select, Space } from "antd";
 import type { FormInstance } from "antd";
+import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
+import ru from "emoji-picker-react/dist/data/emojis-ru";
 // @ts-expect-error no types for react-quill in tsconfig
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -227,8 +229,41 @@ export function RichTextEditor({
   onChange?: (v: string) => void;
   placeholder?: string;
 }) {
+  const quillRef = useRef<ReactQuill>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const v = value ?? "";
   const displayValue = v === "" ? QUILL_EMPTY : v;
+
+  const insertEmoji = (emoji: string) => {
+    const editor = quillRef.current?.getEditor?.();
+    if (editor) {
+      const range = editor.getSelection(true);
+      if (range) {
+        editor.insertText(range.index, emoji);
+        editor.setSelection(range.index + emoji.length);
+      } else {
+        const len = editor.getLength();
+        editor.insertText(len - 1, emoji);
+        editor.setSelection(len + emoji.length - 1);
+      }
+      // Quill onChange сработает автоматически
+    } else {
+      onChange?.((v || "") + emoji);
+    }
+    setEmojiOpen(false);
+  };
+
+  const emojiContent = (
+    <EmojiPicker
+      emojiData={ru}
+      onEmojiClick={(data: EmojiClickData) => insertEmoji(data.emoji)}
+      width={320}
+      height={360}
+      searchPlaceholder="Поиск эмодзи"
+      previewConfig={{ showPreview: false }}
+    />
+  );
+
   return (
     <div
       className="rich-editor-wrap"
@@ -240,7 +275,21 @@ export function RichTextEditor({
         resize: "vertical",
       }}
     >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+        <Popover
+          content={emojiContent}
+          trigger="click"
+          open={emojiOpen}
+          onOpenChange={setEmojiOpen}
+        >
+          <Button type="text" size="small" style={{ fontSize: 20 }} title="Вставить эмодзи">
+            😀
+          </Button>
+        </Popover>
+        <span style={{ fontSize: 12, color: "#888", lineHeight: "28px" }}>Эмодзи</span>
+      </div>
       <ReactQuill
+        ref={quillRef}
         theme="snow"
         value={displayValue}
         onChange={(val) => {
