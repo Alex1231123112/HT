@@ -59,8 +59,8 @@ SCHEDULED_ITEMS = Counter("scheduled_task_items_total", "Items processed (plans 
 _scheduler_task: asyncio.Task | None = None
 _s3_cleanup_task: asyncio.Task | None = None
 _scheduled_task_status: dict[str, dict] = {
-    "content_plan": {"last_run": None, "success_count": 0, "error_count": 0},
-    "s3_cleanup": {"last_run": None, "success_count": 0, "error_count": 0},
+    "content_plan": {"last_run": None, "success_count": 0, "error_count": 0, "last_error": None},
+    "s3_cleanup": {"last_run": None, "success_count": 0, "error_count": 0, "last_error": None},
 }
 
 
@@ -136,12 +136,14 @@ async def _scheduled_content_plan_worker() -> None:
             SCHEDULED_RUNS.labels(task=task, status="success").inc()
             _scheduled_task_status[task]["last_run"] = datetime.utcnow().isoformat()
             _scheduled_task_status[task]["success_count"] += 1
+            _scheduled_task_status[task]["last_error"] = None
         except asyncio.CancelledError:
             raise
         except Exception as e:
             log.exception("Content plan worker error (will retry): %s", e)
             SCHEDULED_RUNS.labels(task=task, status="error").inc()
             _scheduled_task_status[task]["error_count"] += 1
+            _scheduled_task_status[task]["last_error"] = str(e)
         finally:
             SCHEDULED_DURATION.labels(task=task).observe(time.monotonic() - start)
         await asyncio.sleep(interval)
@@ -166,6 +168,7 @@ async def _scheduled_s3_cleanup_worker() -> None:
                 SCHEDULED_RUNS.labels(task=task, status="success").inc()
                 _scheduled_task_status[task]["last_run"] = datetime.utcnow().isoformat()
                 _scheduled_task_status[task]["success_count"] += 1
+                _scheduled_task_status[task]["last_error"] = None
                 row = await db.get(SystemSetting, "s3_cleanup_interval_hours")
                 raw = (row.value if row else "24").strip()
                 try:
@@ -178,6 +181,7 @@ async def _scheduled_s3_cleanup_worker() -> None:
             log.exception("S3 cleanup worker error (will retry): %s", e)
             SCHEDULED_RUNS.labels(task=task, status="error").inc()
             _scheduled_task_status[task]["error_count"] += 1
+            _scheduled_task_status[task]["last_error"] = str(e)
             interval_hours = 1
         finally:
             SCHEDULED_DURATION.labels(task=task).observe(time.monotonic() - start)

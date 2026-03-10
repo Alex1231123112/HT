@@ -25,7 +25,7 @@ export function DashboardPage() {
     url: "/dashboard/activity",
     method: "get",
   });
-  const { result: scheduledResp } = useCustom<{ tasks: Record<string, { last_run: string | null; success_count: number; error_count: number; running: boolean }> }>({
+  const { result: scheduledResp } = useCustom<{ tasks: Record<string, { last_run: string | null; success_count: number; error_count: number; last_error: string | null; running: boolean }> }>({
     url: "/scheduled-tasks",
     method: "get",
   });
@@ -81,6 +81,7 @@ export function DashboardPage() {
               <span>Последний запуск: {t.last_run ?? "—"}</span>
               <span>OK: {t.success_count}</span>
               <span>Ошибок: {t.error_count}</span>
+              {t.last_error && <span className="muted" title={t.last_error}>Ошибка: {t.last_error.slice(0, 80)}{t.last_error.length > 80 ? "…" : ""}</span>}
             </div>
           ))}
         </div>
