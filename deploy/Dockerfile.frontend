@@ -9,7 +9,8 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY admin/frontend .
 # Ограничение CPU при сборке: меньше параллельных потоков
 ENV UV_THREADPOOL_SIZE=2
-ENV NODE_OPTIONS="--max-old-space-size=512"
+# Vite+React+refine требует ~1GB heap (512MB недостаточно)
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 RUN npm run build
 
 FROM nginx:stable-alpine
