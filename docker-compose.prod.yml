@@ -28,7 +28,7 @@ services:
       resources:
         limits:
           cpus: "1"
-          memory: 384M
+          memory: 512M
 
   bot:
     environment:
@@ -46,4 +46,4 @@ services:
       resources:
         limits:
           cpus: "1"
-          memory: 384M
+          memory: 512M

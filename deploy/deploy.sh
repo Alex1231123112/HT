@@ -29,19 +29,20 @@ else
   $COMPOSE --progress=plain build
 fi
 echo "=== Stopping old containers ==="
-$COMPOSE down 2>/dev/null || true
+$COMPOSE down --remove-orphans 2>/dev/null || true
 echo "=== Starting containers ==="
-$COMPOSE up -d
+$COMPOSE up -d --remove-orphans
 
 # Лимиты CPU/памяти для standalone (deploy.resources работает только в Swarm)
+# api/db: 512M — 384M вызывало OOM при alembic/старте
 for svc in api bot frontend db minio; do
   cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
   if [ -n "$cid" ]; then
     case $svc in
-      api)   docker update --cpus=1 --memory=384m "$cid" 2>/dev/null || true ;;
+      api)   docker update --cpus=1 --memory=512m "$cid" 2>/dev/null || true ;;
       bot)   docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null || true ;;
       frontend) docker update --cpus=0.5 --memory=96m "$cid" 2>/dev/null || true ;;
-      db)    docker update --cpus=1 --memory=384m "$cid" 2>/dev/null || true ;;
+      db)    docker update --cpus=1 --memory=512m "$cid" 2>/dev/null || true ;;
       minio) docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null || true ;;
     esac
   fi
@@ -60,7 +61,8 @@ while [ $i -lt 18 ]; do
   sleep 5
 done
 
-$COMPOSE exec -T api alembic upgrade head
+echo "=== Running migrations ==="
+$COMPOSE exec -T api alembic upgrade head || { echo "ERROR: alembic upgrade failed"; exit 1; }
 echo "=== Verifying deploy ==="
 $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: health check failed after deploy"; exit 1; }
 echo "=== Done [$(date '+%H:%M:%S')]. API OK ==="
