@@ -70,4 +70,6 @@ for svc in api bot frontend db minio; do
 done
 
 echo "=== Done [$(date '+%H:%M:%S')]. API OK ==="
-[[ "$*" != *"--no-prune"* ]] && docker image prune -f --filter "until=24h" 2>/dev/null || true
+# Prune — без filter (until=24h давал exit 1). Отключить: ./deploy.sh --no-prune
+[[ "$*" != *"--no-prune"* ]] && (docker image prune -f 2>/dev/null) || true
+exit 0
