@@ -15,8 +15,13 @@ export default defineConfig({
       output: {
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
-          refine: ["@refinedev/core", "@refinedev/antd", "@refinedev/react-router"],
-          antd: ["antd", "@ant-design/icons"],
+          refine: [
+            "@refinedev/core",
+            "@refinedev/antd",
+            "@refinedev/react-router",
+            "antd",
+            "@ant-design/icons",
+          ],
         },
       },
     },
