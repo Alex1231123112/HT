@@ -54,12 +54,14 @@ async def _get_used_s3_keys(db: AsyncSession) -> set[str]:
     """
     used: set[str] = set()
     for model in (Promotion, News, Delivery, Event):
-        rows = (
-            await db.execute(
-                select(model.image_url).where(model.is_active.is_(True), model.image_url.isnot(None))
-            )
-        ).scalars().all()
-        for (url,) in rows:
+        urls = list(
+            (
+                await db.scalars(
+                    select(model.image_url).where(model.is_active.is_(True), model.image_url.isnot(None))
+                )
+            ).all()
+        )
+        for url in urls:
             key = _extract_s3_key_from_url(url)
             if key:
                 used.add(key)
