@@ -41,14 +41,14 @@ def test_extract_s3_key_from_url_path_traversal():
 async def test_get_used_s3_keys_returns_extracted_keys():
     """_get_used_s3_keys возвращает ключи только от is_active записей (мок БД)."""
     urls = [
-        ("https://s3.example.com/bucket/uploads/used1.jpg",),
-        ("/uploads/used2.png",),
+        "https://s3.example.com/bucket/uploads/used1.jpg",
+        "/uploads/used2.png",
     ]
     mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = urls
+    mock_result.all.return_value = urls
 
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=mock_result)
+    db.scalars = AsyncMock(return_value=mock_result)
 
     used = await _get_used_s3_keys(db)
     assert "uploads/used1.jpg" in used
