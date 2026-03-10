@@ -9,6 +9,7 @@ DEFAULT_SYSTEM_SETTINGS = {
     "backup_schedule": "0 2 * * *",
     "backup_retention_days": "30",
     "timezone": "Europe/Moscow",
+    "s3_cleanup_interval_hours": "24",
 }
 
 

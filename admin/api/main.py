@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 
 from admin.api.content_plan_sender import process_due_content_plans
+from admin.api.s3_cleanup import run_daily_s3_cleanup
 from admin.api.routers.admins import router as admins_router
 from admin.api.routers.analytics import router as analytics_router
 from admin.api.routers.auth import router as auth_router
@@ -29,7 +30,7 @@ from admin.api.schemas import GenericMessage
 from admin.api.security import clear_revoked_tokens
 from config.logging import configure_logging
 from config.settings import get_settings
-from database.models import User
+from database.models import SystemSetting, User
 from database.seed import ensure_default_admin, ensure_default_system_settings
 from database.session import SessionLocal, engine
 
@@ -51,6 +52,7 @@ app.mount("/uploads", StaticFiles(directory=upload_root), name="uploads")
 REQ_COUNT = Counter("api_requests_total", "Total API requests", ["path", "method"])
 REQ_LATENCY = Histogram("api_latency_seconds", "API latency", ["path", "method"])
 _scheduler_task: asyncio.Task | None = None
+_s3_cleanup_task: asyncio.Task | None = None
 
 
 def _normalize_metrics_path(path: str) -> str:
@@ -88,8 +90,10 @@ async def startup() -> None:
         await ensure_default_system_settings(session)
         n = await session.scalar(select(func.count(User.id))) or 0
         log.info("API startup: users in DB = %s", n)
-    global _scheduler_task
+    global _scheduler_task, _s3_cleanup_task
     _scheduler_task = asyncio.create_task(_scheduled_content_plan_worker())
+    if settings.use_s3:
+        _s3_cleanup_task = asyncio.create_task(_scheduled_s3_cleanup_worker())
 
 
 @app.on_event("shutdown")
@@ -98,6 +102,10 @@ async def shutdown() -> None:
         _scheduler_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await _scheduler_task
+    if _s3_cleanup_task:
+        _s3_cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _s3_cleanup_task
     await engine.dispose()
 
 
@@ -116,6 +124,30 @@ async def _scheduled_content_plan_worker() -> None:
         except Exception as e:
             log.exception("Content plan worker error (will retry): %s", e)
         await asyncio.sleep(interval)
+
+
+async def _scheduled_s3_cleanup_worker() -> None:
+    import logging
+
+    log = logging.getLogger(__name__)
+    while True:
+        try:
+            async with SessionLocal() as db:
+                deleted = await run_daily_s3_cleanup(db)
+                if deleted > 0:
+                    log.info("S3 cleanup worker: removed %s file(s)", deleted)
+                row = await db.get(SystemSetting, "s3_cleanup_interval_hours")
+                raw = (row.value if row else "24").strip()
+                try:
+                    interval_hours = max(1, min(168, int(raw)))
+                except ValueError:
+                    interval_hours = 24
+                await asyncio.sleep(interval_hours * 3600)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.exception("S3 cleanup worker error (will retry): %s", e)
+            await asyncio.sleep(3600)
 
 
 @app.get("/health", response_model=GenericMessage)

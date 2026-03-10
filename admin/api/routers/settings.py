@@ -105,6 +105,24 @@ async def update_backup_policy(
     return GenericMessage(message="backup_policy_saved")
 
 
+@router.put("/s3-cleanup-policy", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
+async def update_s3_cleanup_policy(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(require_roles("superadmin")),
+) -> GenericMessage:
+    interval_hours = str(payload.get("interval_hours", 24))
+    existing = await db.get(SystemSetting, "s3_cleanup_interval_hours")
+    if existing:
+        existing.value = interval_hours
+        db.add(existing)
+    else:
+        db.add(SystemSetting(key="s3_cleanup_interval_hours", value=interval_hours))
+    db.add(ActivityLog(admin_id=admin.id, action="update_s3_cleanup_policy", details=f"interval_hours={interval_hours}"))
+    await db.commit()
+    return GenericMessage(message="s3_cleanup_policy_saved")
+
+
 @router.post("/restore/{filename}", response_model=GenericMessage, dependencies=[Depends(verify_csrf)])
 async def restore_backup(
     filename: str,

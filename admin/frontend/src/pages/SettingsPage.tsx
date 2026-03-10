@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiPost, apiPut } from "../api";
 import { useAdmin } from "../context/AdminContext";
@@ -8,7 +8,13 @@ export function SettingsPage() {
   const [tab, setTab] = useState<"general" | "security" | "backups">("general");
   const [schedule, setSchedule] = useState("0 2 * * *");
   const [retentionDays, setRetentionDays] = useState("30");
+  const [s3IntervalHours, setS3IntervalHours] = useState("24");
   const [restoreFile, setRestoreFile] = useState("");
+
+  useEffect(() => {
+    const v = systemSettings.s3_cleanup_interval_hours;
+    if (v !== undefined && v !== null) setS3IntervalHours(String(v));
+  }, [systemSettings.s3_cleanup_interval_hours]);
 
   return (
     <section className="card">
@@ -47,6 +53,20 @@ export function SettingsPage() {
             <input value={retentionDays} onChange={(e) => setRetentionDays(e.target.value)} placeholder="retention days" />
             <button onClick={() => apiPut("/settings/backup-policy", { schedule, retention_days: Number(retentionDays) })}>
               Сохранить политику
+            </button>
+          </div>
+          <div className="grid-form">
+            <label>Очистка S3: интервал (часов)</label>
+            <input
+              type="number"
+              min={1}
+              max={168}
+              value={s3IntervalHours}
+              onChange={(e) => setS3IntervalHours(e.target.value)}
+              placeholder="24"
+            />
+            <button onClick={() => apiPut("/settings/s3-cleanup-policy", { interval_hours: Number(s3IntervalHours) })}>
+              Сохранить
             </button>
           </div>
           <div className="grid-form">
