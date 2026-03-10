@@ -33,8 +33,29 @@ $COMPOSE down --remove-orphans 2>/dev/null || true
 echo "=== Starting containers ==="
 $COMPOSE up -d --remove-orphans
 
-# Лимиты CPU/памяти для standalone (deploy.resources работает только в Swarm)
-# api/db: 512M — 384M вызывало OOM при alembic/старте
+# Лимиты CPU/памяти — применяем ПОСЛЕ миграций, чтобы не мешать старту
+# (api/db: 512M; 384M вызывало OOM)
+
+# Ждём готовности API (до 90 сек)
+echo "=== Waiting for API health ==="
+i=0
+while [ $i -lt 18 ]; do
+  if $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health >/dev/null 2>&1; then
+    echo "API ready"
+    break
+  fi
+  i=$((i + 1))
+  echo "  attempt $i/18..."
+  [ $i -eq 18 ] && { echo "ERROR: API health check timeout"; exit 1; }
+  sleep 5
+done
+
+echo "=== Running migrations ==="
+$COMPOSE exec -T api alembic upgrade head || { echo "ERROR: alembic upgrade failed"; exit 1; }
+echo "=== Verifying deploy ==="
+$COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: health check failed after deploy"; exit 1; }
+
+echo "=== Applying CPU/memory limits ==="
 for svc in api bot frontend db minio; do
   cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
   if [ -n "$cid" ]; then
@@ -48,22 +69,5 @@ for svc in api bot frontend db minio; do
   fi
 done
 
-# Ждём готовности API (до 90 сек)
-echo "=== Waiting for API health ==="
-i=0
-while [ $i -lt 18 ]; do
-  if $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health >/dev/null 2>&1; then
-    echo "API ready"
-    break
-  fi
-  i=$((i + 1))
-  [ $i -eq 18 ] && { echo "ERROR: API health check timeout"; exit 1; }
-  sleep 5
-done
-
-echo "=== Running migrations ==="
-$COMPOSE exec -T api alembic upgrade head || { echo "ERROR: alembic upgrade failed"; exit 1; }
-echo "=== Verifying deploy ==="
-$COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: health check failed after deploy"; exit 1; }
 echo "=== Done [$(date '+%H:%M:%S')]. API OK ==="
 [[ "$*" != *"--no-prune"* ]] && docker image prune -f --filter "until=24h" 2>/dev/null || true
