@@ -30,7 +30,7 @@ from admin.api.security import clear_revoked_tokens
 from config.logging import configure_logging
 from config.settings import get_settings
 from database.models import User
-from database.seed import ensure_default_admin
+from database.seed import ensure_default_admin, ensure_default_system_settings
 from database.session import SessionLocal, engine
 
 settings = get_settings()
@@ -85,6 +85,7 @@ async def startup() -> None:
     log.info("API DB: %s", _redact_db_url(settings.database_url))
     async with SessionLocal() as session:
         await ensure_default_admin(session)
+        await ensure_default_system_settings(session)
         n = await session.scalar(select(func.count(User.id))) or 0
         log.info("API startup: users in DB = %s", n)
     global _scheduler_task

@@ -56,18 +56,20 @@ echo "=== Verifying deploy ==="
 $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: health check failed after deploy"; exit 1; }
 
 echo "=== Applying CPU/memory limits ==="
+set +e
 for svc in api bot frontend db minio; do
   cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
   if [ -n "$cid" ]; then
     case $svc in
-      api)   docker update --cpus=1 --memory=512m "$cid" 2>/dev/null || true ;;
-      bot)   docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null || true ;;
-      frontend) docker update --cpus=0.5 --memory=96m "$cid" 2>/dev/null || true ;;
-      db)    docker update --cpus=1 --memory=512m "$cid" 2>/dev/null || true ;;
-      minio) docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null || true ;;
+      api)   docker update --cpus=1 --memory=512m "$cid" 2>/dev/null ;;
+      bot)   docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null ;;
+      frontend) docker update --cpus=0.5 --memory=96m "$cid" 2>/dev/null ;;
+      db)    docker update --cpus=1 --memory=512m "$cid" 2>/dev/null ;;
+      minio) docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null ;;
     esac
   fi
 done
+set -e
 
 echo "=== Done [$(date '+%H:%M:%S')]. API OK ==="
 # Prune — без filter (until=24h давал exit 1). Отключить: ./deploy.sh --no-prune
