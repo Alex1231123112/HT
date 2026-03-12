@@ -2,8 +2,6 @@
 # Использование: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 services:
   loki:
-    networks:
-      - monitoring
     image: grafana/loki:3.0.0
     restart: unless-stopped
     volumes:
@@ -15,8 +13,6 @@ services:
 
   promtail:
     image: grafana/promtail:3.0.0
-    networks:
-      - monitoring
     restart: unless-stopped
     volumes:
       - ./deploy/promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
@@ -27,9 +23,6 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.47.0
-    networks:
-      - default
-      - monitoring
     restart: unless-stopped
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -45,6 +38,7 @@ services:
   grafana:
     image: grafana/grafana:10.2.0
     restart: unless-stopped
+    network_mode: host
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -53,21 +47,11 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "3000:3000"
     depends_on:
       prometheus:
         condition: service_started
       loki:
         condition: service_started
-    networks:
-      - monitoring
-    links:
-      - loki
-
-networks:
-  monitoring:
-    driver: bridge
 
 volumes:
   grafana_data:
