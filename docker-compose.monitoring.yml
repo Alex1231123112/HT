@@ -1,6 +1,26 @@
-# Prometheus + Grafana для мониторинга
+# Prometheus + Grafana + Loki + Promtail для мониторинга и логов
 # Использование: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 services:
+  loki:
+    image: grafana/loki:3.0.0
+    restart: unless-stopped
+    volumes:
+      - ./deploy/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    restart: unless-stopped
+    volumes:
+      - ./deploy/promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+
   prometheus:
     image: prom/prometheus:v2.47.0
     restart: unless-stopped
@@ -30,6 +50,8 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+      - loki
 
 volumes:
   grafana_data:
+  loki_data:

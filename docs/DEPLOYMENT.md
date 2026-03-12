@@ -16,12 +16,13 @@
    - Работает вход в админ-панель
    - Бот отвечает на `/start` и `/help`
 
-## Мониторинг (Prometheus + Grafana)
+## Мониторинг (Prometheus + Grafana + Loki)
 - Добавьте в `.env`: `ENABLE_MONITORING=1`
 - Задайте `GRAFANA_ADMIN_PASSWORD` (по умолчанию `admin`).
-- При деплое поднимутся Prometheus (порт 9090) и Grafana (порт 3000).
-- Grafana: логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD`. Datasource Prometheus уже настроен.
-- Дашборд «HT: Периодические задачи» — метрики content_plan и s3_cleanup.
+- При деплое поднимутся Prometheus (9090), Grafana (3000), Loki (3100), Promtail.
+- Grafana: логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD`. Datasources: Prometheus, Loki.
+- Дашборды: «HT: Периодические задачи» (метрики), «HT: Логи» (логи контейнеров).
+- Explore → Loki: запрос `{container=~".*api.*"}` для логов API.
 - Локально: `docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d`
 
 ## Резервные копии

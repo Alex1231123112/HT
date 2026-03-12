@@ -61,7 +61,7 @@ $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: hea
 
 echo "=== Applying CPU/memory limits ==="
 set +e
-for svc in api bot frontend db minio prometheus grafana; do
+for svc in api bot frontend db minio prometheus grafana loki promtail; do
   cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
   if [ -n "$cid" ]; then
     case $svc in
@@ -72,6 +72,8 @@ for svc in api bot frontend db minio prometheus grafana; do
       minio) docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null ;;
       prometheus) docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null ;;
       grafana) docker update --cpus=0.25 --memory=128m "$cid" 2>/dev/null ;;
+      loki) docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null ;;
+      promtail) docker update --cpus=0.25 --memory=128m "$cid" 2>/dev/null ;;
     esac
   fi
 done
