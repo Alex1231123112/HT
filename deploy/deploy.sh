@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy to root@147.45.96.211 - run on server: ./deploy/deploy.sh
-set -e
+set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "=== Deploy HT ==="
@@ -12,6 +12,42 @@ if ! docker compose version &>/dev/null; then
   apt-get update && apt-get install -y docker-compose-plugin || true
 fi
 [ ! -f .env ] && { echo "ERROR: .env not found"; exit 1; }
+
+echo "=== Preflight: validating DB credentials in .env ==="
+python3 - <<'PY'
+from pathlib import Path
+from urllib.parse import urlsplit, unquote
+import sys
+
+env_path = Path(".env")
+values = {}
+for raw in env_path.read_text(encoding="utf-8").splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    values[key.strip()] = value.strip()
+
+db_pass = values.get("POSTGRES_PASSWORD")
+db_url = values.get("DATABASE_URL", "")
+if not db_pass:
+    print("ERROR: POSTGRES_PASSWORD is missing in .env")
+    sys.exit(1)
+if not db_url:
+    print("ERROR: DATABASE_URL is missing in .env")
+    sys.exit(1)
+
+parsed = urlsplit(db_url)
+url_pass = unquote(parsed.password or "")
+if not url_pass:
+    print("ERROR: DATABASE_URL has no password")
+    sys.exit(1)
+if url_pass != db_pass:
+    print("ERROR: POSTGRES_PASSWORD and DATABASE_URL password mismatch")
+    sys.exit(1)
+
+print("OK: DB credentials are consistent")
+PY
 
 # Внешний S3: standalone compose без MinIO + prod-s3. Иначе — base + prod.
 if [ -f docker-compose.s3-external.yml ] && grep -qE '^S3_ENDPOINT_URL=' .env 2>/dev/null; then
@@ -32,9 +68,7 @@ if [ "$1" = "--no-cache" ]; then
 else
   $COMPOSE --progress=plain build
 fi
-echo "=== Stopping old containers ==="
-$COMPOSE down --remove-orphans 2>/dev/null || true
-echo "=== Starting containers ==="
+echo "=== Starting/updating containers ==="
 $COMPOSE up -d --remove-orphans
 
 # Лимиты CPU/памяти — применяем ПОСЛЕ миграций, чтобы не мешать старту

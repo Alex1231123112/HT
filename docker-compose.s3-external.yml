@@ -18,7 +18,7 @@ services:
     environment:
       POSTGRES_DB: botdb
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d botdb"]
       interval: 10s
@@ -38,7 +38,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/botdb
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       S3_BUCKET: ${S3_BUCKET}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
@@ -65,7 +65,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/botdb
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/botdb
       # Бот качает медиа по API (относительные пути) или по полному S3 URL из БД
       UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://api:8000}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
