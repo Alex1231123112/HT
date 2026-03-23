@@ -2,7 +2,7 @@
 services:
   frontend:
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-5173}:80"
     deploy:
       resources:
         limits:
