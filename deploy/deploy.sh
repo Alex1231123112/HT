@@ -62,8 +62,15 @@ fi
 # BuildKit + кэш: npm/pip кэшируются между сборками
 export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain
+NO_CACHE=0
+for arg in "$@"; do
+  if [ "$arg" = "--no-cache" ]; then
+    NO_CACHE=1
+    break
+  fi
+done
 echo "=== Building images (может занять 5–10 мин) [$(date '+%H:%M:%S')] ==="
-if [ "$1" = "--no-cache" ]; then
+if [ "$NO_CACHE" -eq 1 ]; then
   $COMPOSE --progress=plain build --no-cache
 else
   $COMPOSE --progress=plain build
