@@ -14,7 +14,7 @@ import {
 } from "../components/PublicationEditor";
 import type { TemplateItem } from "../components/PublicationEditor";
 
-const MAX_SIZE_MB = 5;
+const MAX_SIZE_MB = 50;
 
 function MediaUploadField() {
   const form = Form.useFormInstance();

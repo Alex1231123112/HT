@@ -7,7 +7,7 @@ import { getApiUrl, uploadContentFile } from "../providers";
 import React, { useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 
-const MAX_SIZE_MB = 5;
+const MAX_SIZE_MB = 50;
 
 const audienceOptions = [
   { label: "Все", value: "all" },
