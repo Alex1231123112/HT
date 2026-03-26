@@ -143,6 +143,9 @@ def _description_for_telegram(html_desc: str | None) -> str:
     if not html_desc or not html_desc.strip():
         return ""
     s = html_desc.strip()
+    # Нормализуем неразрывные пробелы, чтобы в Telegram не отображалось как "&nbsp;".
+    s = s.replace("\xa0", " ")
+    s = re.sub(r"&#160;|&nbsp;", " ", s, flags=re.IGNORECASE)
     s = s.replace("</p>", "\n").replace("<p>", "")
     s = re.sub(r'\s+rel="[^"]*"', "", s)
     s = re.sub(r'\s+target="[^"]*"', "", s)
