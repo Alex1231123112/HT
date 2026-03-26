@@ -14,6 +14,7 @@ from database.models import Event, EventRegistration, User, UserType
 from database.session import SessionLocal
 
 settings = get_settings()
+PAGE_SIZE = 5
 
 
 def _is_internal_media_host(netloc: str) -> bool:
@@ -231,7 +232,7 @@ async def render_content(message: Message, model, title: str, *, user_id: int | 
                 )
                 .order_by(model.published_at.desc().nullslast(), model.created_at.desc())
             )
-            items = list((await session.scalars(query)).all())
+            items = list((await session.scalars(query.limit(PAGE_SIZE + 1))).all())
             logging.info(
                 "Content %s: user_id=%s user_type=%s items=%s",
                 model.__tablename__,
@@ -247,8 +248,87 @@ async def render_content(message: Message, model, title: str, *, user_id: int | 
         await message.answer(f"<b>{title}</b>\nПока нет актуальных записей.", parse_mode="HTML")
         return
     await message.answer(f"<b>{title}</b>", parse_mode="HTML")
-    for item in items[:5]:
+    has_more = len(items) > PAGE_SIZE
+    for item in items[:PAGE_SIZE]:
         await _send_content_item(message, item)
+    if has_more:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Показать ещё",
+                        callback_data=f"content_more:{model.__tablename__}:{PAGE_SIZE}",
+                    )
+                ]
+            ]
+        )
+        await message.answer("Загрузить следующую порцию:", reply_markup=kb)
+
+
+async def render_content_more(
+    message: Message,
+    model,
+    title: str,
+    *,
+    user_id: int | None = None,
+    offset: int = 0,
+) -> bool:
+    """Отправляет следующую порцию контента и кнопку для продолжения."""
+    if not message:
+        return False
+    if user_id is None:
+        user_id = getattr(message.from_user, "id", None)
+    if user_id is None:
+        logging.warning("render_content_more: no user_id")
+        return False
+    user_id = int(user_id)
+    offset = max(0, int(offset))
+    try:
+        async with SessionLocal() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                await message.answer("Сначала выполните регистрацию через /start")
+                return False
+            if user.deleted_at is not None:
+                await message.answer("Ваш аккаунт деактивирован. Обратитесь к менеджеру.")
+                return False
+            query = (
+                select(model)
+                .where(
+                    and_(
+                        model.is_active.is_(True),
+                        or_(model.user_type == user.user_type, model.user_type == UserType.ALL),
+                    )
+                )
+                .order_by(model.published_at.desc().nullslast(), model.created_at.desc())
+                .offset(offset)
+                .limit(PAGE_SIZE + 1)
+            )
+            items = list((await session.scalars(query)).all())
+    except SQLAlchemyError as e:
+        logging.exception("Database error while loading content more: %s", e)
+        await message.answer("Не удалось получить данные. Попробуйте позже.")
+        return False
+    if not items:
+        await message.answer(f"<b>{title}</b>\nБольше записей нет.", parse_mode="HTML")
+        return False
+    has_more = len(items) > PAGE_SIZE
+    for item in items[:PAGE_SIZE]:
+        await _send_content_item(message, item)
+    if has_more:
+        next_offset = offset + PAGE_SIZE
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Показать ещё",
+                        callback_data=f"content_more:{model.__tablename__}:{next_offset}",
+                    )
+                ]
+            ]
+        )
+        await message.answer("Загрузить следующую порцию:", reply_markup=kb)
+    return has_more
 
 
 def _event_registration_keyboard(event_id: int, user_registered: bool, places_left: bool) -> InlineKeyboardMarkup | None:
@@ -382,7 +462,7 @@ async def render_events(message: Message, *, user_id: int | None = None) -> None
                 )
                 .order_by(Event.event_date.asc())
             )
-            events = list((await session.scalars(query)).all())
+            events = list((await session.scalars(query.limit(PAGE_SIZE + 1))).all())
             logging.info(
                 "Events: user_id=%s user_type=%s count=%s",
                 user_id,
@@ -406,7 +486,8 @@ async def render_events(message: Message, *, user_id: int | None = None) -> None
                 f"🎪 <b>ПРЕДСТОЯЩИЕ МЕРОПРИЯТИЯ</b>\nдля {user_type_label}\n\n─────────────────",
                 parse_mode="HTML",
             )
-            for event in events[:5]:
+            has_more = len(events) > PAGE_SIZE
+            for event in events[:PAGE_SIZE]:
                 reg_count = await session.scalar(
                     select(func.count())
                     .select_from(EventRegistration)
@@ -424,6 +505,85 @@ async def render_events(message: Message, *, user_id: int | None = None) -> None
                     registered_count=reg_count or 0,
                     user_registered=user_reg is not None,
                 )
+            if has_more:
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="Показать ещё", callback_data=f"events_more:{PAGE_SIZE}")]
+                    ]
+                )
+                await message.answer("Загрузить следующую порцию:", reply_markup=kb)
     except SQLAlchemyError as e:
         logging.exception("Database error while loading events: %s", e)
         await message.answer("Не удалось получить данные. Попробуйте позже.")
+
+
+async def render_events_more(message: Message, *, user_id: int | None = None, offset: int = 0) -> bool:
+    """Отправляет следующую порцию мероприятий и кнопку продолжения."""
+    if not message:
+        return False
+    if user_id is None:
+        user_id = getattr(message.from_user, "id", None)
+    if user_id is None:
+        logging.warning("render_events_more: no user_id")
+        return False
+    user_id = int(user_id)
+    offset = max(0, int(offset))
+    try:
+        async with SessionLocal() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                await message.answer("Сначала выполните регистрацию через /start")
+                return False
+            if user.deleted_at is not None:
+                await message.answer("Ваш аккаунт деактивирован. Обратитесь к менеджеру.")
+                return False
+            now = datetime.utcnow()
+            query = (
+                select(Event)
+                .where(
+                    and_(
+                        Event.is_active.is_(True),
+                        Event.event_date >= now,
+                        or_(Event.user_type == user.user_type, Event.user_type == UserType.ALL),
+                    )
+                )
+                .order_by(Event.event_date.asc())
+                .offset(offset)
+                .limit(PAGE_SIZE + 1)
+            )
+            events = list((await session.scalars(query)).all())
+            if not events:
+                await message.answer("Больше мероприятий нет.")
+                return False
+            has_more = len(events) > PAGE_SIZE
+            for event in events[:PAGE_SIZE]:
+                reg_count = await session.scalar(
+                    select(func.count())
+                    .select_from(EventRegistration)
+                    .where(EventRegistration.event_id == event.id)
+                )
+                user_reg = await session.scalar(
+                    select(EventRegistration).where(
+                        EventRegistration.event_id == event.id,
+                        EventRegistration.user_id == user_id,
+                    )
+                )
+                await _send_event_item(
+                    message,
+                    event,
+                    registered_count=reg_count or 0,
+                    user_registered=user_reg is not None,
+                )
+            if has_more:
+                next_offset = offset + PAGE_SIZE
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="Показать ещё", callback_data=f"events_more:{next_offset}")]
+                    ]
+                )
+                await message.answer("Загрузить следующую порцию:", reply_markup=kb)
+            return has_more
+    except SQLAlchemyError as e:
+        logging.exception("Database error while loading events more: %s", e)
+        await message.answer("Не удалось получить данные. Попробуйте позже.")
+        return False

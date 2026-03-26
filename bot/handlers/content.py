@@ -14,7 +14,7 @@ from bot.keyboards import (
     events_back_keyboard,
     menu_keyboard,
 )
-from bot.utils import render_content, render_events
+from bot.utils import render_content, render_content_more, render_events, render_events_more
 from config.settings import get_settings
 from database.models import Delivery, Event, EventRegistration, Manager, News, Promotion, User
 from database.session import SessionLocal
@@ -346,3 +346,62 @@ async def event_unregister(callback: CallbackQuery) -> None:
             await session.delete(reg)
             await session.commit()
     await callback.answer("Запись на мероприятие отменена.")
+
+
+@router.callback_query(F.data.startswith("content_more:"))
+async def content_more(callback: CallbackQuery) -> None:
+    if not callback.message:
+        await callback.answer()
+        return
+    data = callback.data or ""
+    parts = data.split(":")
+    if len(parts) != 3:
+        await callback.answer()
+        return
+    _, content_type, raw_offset = parts
+    try:
+        offset = int(raw_offset)
+    except ValueError:
+        await callback.answer()
+        return
+    mapping = {
+        "promotions": (Promotion, "🎁 Актуальные акции:"),
+        "news": (News, "📰 Актуальные новинки:"),
+        "deliveries": (Delivery, "📦 Актуальные приходы:"),
+    }
+    target = mapping.get(content_type)
+    if not target:
+        await callback.answer()
+        return
+    model, title = target
+    await render_content_more(
+        callback.message,
+        model,
+        title,
+        user_id=callback.from_user.id if callback.from_user else None,
+        offset=offset,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("events_more:"))
+async def events_more(callback: CallbackQuery) -> None:
+    if not callback.message:
+        await callback.answer()
+        return
+    data = callback.data or ""
+    parts = data.split(":")
+    if len(parts) != 2:
+        await callback.answer()
+        return
+    try:
+        offset = int(parts[1])
+    except ValueError:
+        await callback.answer()
+        return
+    await render_events_more(
+        callback.message,
+        user_id=callback.from_user.id if callback.from_user else None,
+        offset=offset,
+    )
+    await callback.answer()
