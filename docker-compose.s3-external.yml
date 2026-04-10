@@ -10,8 +10,24 @@
 #   S3_SECRET_ACCESS_KEY=...
 #   S3_REGION=ru-1
 #   S3_PUBLIC_BASE_URL=https://s3.twcstorage.ru/your-bucket-name
+#
+# Прокси Tor (как в docker-compose.yml): --profile tor, TELEGRAM_PROXY=http://tor:8118
 
 services:
+  tor:
+    profiles:
+      - tor
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.tor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8118 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
   db:
     image: postgres:15
     restart: unless-stopped

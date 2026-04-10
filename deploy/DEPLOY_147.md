@@ -11,6 +11,8 @@
 | `SSH_HOST` | `147.45.96.211` |
 | `SSH_USER` | `root` |
 | `SSH_PRIVATE_KEY` | Приватный SSH-ключ (содержимое `~/.ssh/id_ed25519` или `id_rsa`) |
+| `DEPLOY_PATH` | (опционально) абсолютный путь к клону репо на сервере. Если не задан — используется `/opt/ht`. |
+| `GH_DEPLOY_TOKEN` | Не нужен, пока репозиторий **публичный** (`git fetch origin` без логина). Для **private** — PAT (read) или deploy key на сервере + `git@github.com:...` в `origin`. |
 
 **Первый раз — настройка SSH-ключа:**
 ```bash

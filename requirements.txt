@@ -1,4 +1,6 @@
 aiogram==3.16.0
+# Прокси в AiohttpSession (TELEGRAM_PROXY): aiogram тянет aiohttp_socks
+aiohttp-socks>=0.9.0
 aiosqlite==0.20.0
 alembic==1.14.0
 argon2-cffi==23.1.0

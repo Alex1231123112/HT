@@ -59,6 +59,12 @@ fi
 if grep -qE '^ENABLE_MONITORING=1' .env 2>/dev/null; then
   COMPOSE="$COMPOSE -f docker-compose.monitoring.yml"
 fi
+# Tor sidecar: если бот ходит в Telegram через контейнер tor (см. TELEGRAM_PROXY в .env)
+COMPOSE_EXTRA=""
+if grep -qE '^TELEGRAM_PROXY=.*tor:8118' .env 2>/dev/null; then
+  COMPOSE_EXTRA="--profile tor"
+  echo "=== Compose: profile tor (TELEGRAM_PROXY=http://tor:8118) ==="
+fi
 # BuildKit + кэш: npm/pip кэшируются между сборками
 export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain
@@ -71,12 +77,12 @@ for arg in "$@"; do
 done
 echo "=== Building images (может занять 5–10 мин) [$(date '+%H:%M:%S')] ==="
 if [ "$NO_CACHE" -eq 1 ]; then
-  $COMPOSE --progress=plain build --no-cache
+  $COMPOSE $COMPOSE_EXTRA --progress=plain build --no-cache
 else
-  $COMPOSE --progress=plain build
+  $COMPOSE $COMPOSE_EXTRA --progress=plain build
 fi
 echo "=== Starting/updating containers ==="
-$COMPOSE up -d --remove-orphans
+$COMPOSE $COMPOSE_EXTRA up -d --remove-orphans
 
 # Лимиты CPU/памяти — применяем ПОСЛЕ миграций, чтобы не мешать старту
 # (api/db: 512M; 384M вызывало OOM)
@@ -102,7 +108,7 @@ $COMPOSE exec -T api curl -sf http://127.0.0.1:8000/health || { echo "ERROR: hea
 
 echo "=== Applying CPU/memory limits ==="
 set +e
-for svc in api bot frontend db minio prometheus grafana loki promtail; do
+for svc in api bot frontend db minio tor prometheus grafana loki promtail; do
   cid=$($COMPOSE ps -q "$svc" 2>/dev/null)
   if [ -n "$cid" ]; then
     case $svc in
@@ -111,6 +117,7 @@ for svc in api bot frontend db minio prometheus grafana loki promtail; do
       frontend) docker update --cpus=0.5 --memory=96m "$cid" 2>/dev/null ;;
       db)    docker update --cpus=1 --memory=512m "$cid" 2>/dev/null ;;
       minio) docker update --cpus=0.5 --memory=192m "$cid" 2>/dev/null ;;
+      tor) docker update --cpus=0.35 --memory=128m "$cid" 2>/dev/null ;;
       prometheus) docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null ;;
       grafana) docker update --cpus=0.25 --memory=128m "$cid" 2>/dev/null ;;
       loki) docker update --cpus=0.5 --memory=256m "$cid" 2>/dev/null ;;
