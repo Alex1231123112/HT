@@ -76,6 +76,22 @@ services:
       retries: 5
       start_period: 30s
 
+  # Tor с HTTPTunnelPort (HTTP-прокси). Запуск: docker compose --profile tor up -d
+  # В .env: TELEGRAM_PROXY=http://tor:8118
+  tor:
+    profiles:
+      - tor
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.tor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8118 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
   bot:
     build:
       context: .

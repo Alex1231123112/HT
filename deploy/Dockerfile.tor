@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+FROM alpine:3.20
+
+RUN apk add --no-cache tor \
+    && mkdir -p /var/lib/tor \
+    && chown -R tor:tor /var/lib/tor
+
+COPY deploy/tor/torrc /etc/tor/torrc
+
+EXPOSE 8118 9050
+
+USER tor
+
+CMD ["tor", "-f", "/etc/tor/torrc"]

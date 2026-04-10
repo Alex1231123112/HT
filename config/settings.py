@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     mailing_min_interval_minutes: int = Field(default=60, alias="MAILING_MIN_INTERVAL_MINUTES")
     content_plan_check_interval_seconds: int = Field(default=60, alias="CONTENT_PLAN_CHECK_INTERVAL_SECONDS")
     bot_token: str = Field(default="123456:TEST_TOKEN", alias="BOT_TOKEN")
+    telegram_proxy: str | None = Field(
+        default=None,
+        alias="TELEGRAM_PROXY",
+        description="HTTP(S) proxy for Telegram API, e.g. http://127.0.0.1:8118 or socks5://user:pass@host:1080",
+    )
     manager_username: str = Field(default="manager_username", alias="MANAGER_USERNAME")
     admin_default_username: str = Field(default="admin", alias="ADMIN_DEFAULT_USERNAME")
     admin_default_password: str = Field(default="change-me", alias="ADMIN_DEFAULT_PASSWORD")
