@@ -26,13 +26,20 @@ jobs:
           script_stop: true
           debug: true
           command_timeout: 90m
+          # На сервере origin часто = https://github.com/... без credential helper →
+          # «could not read Username for https://github.com». Нужен либо deploy key + SSH remote на сервере,
+          # либо секрет с PAT (read-only) для fetch ниже.
           script: |
             echo "=== SSH connected ==="
-            cd /opt/ht || { echo "ERROR: cd /opt/ht failed"; exit 1; }
+            DEPLOY_PATH='${{ secrets.DEPLOY_PATH }}'
+            DEPLOY_PATH="${DEPLOY_PATH:-/opt/ht}"
+            cd "$DEPLOY_PATH" || { echo "ERROR: cd $DEPLOY_PATH failed (задайте секрет DEPLOY_PATH или создайте каталог)"; exit 1; }
+            set -e
+            REPO_URL="https://x-access-token:${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git"
             for i in 1 2 3; do
               echo "git fetch attempt $i..."
-              timeout 180 git fetch origin && break
-              [ $i -eq 3 ] && { echo "ERROR: git fetch failed after 3 attempts"; exit 1; }
+              timeout 180 git fetch "$REPO_URL" +refs/heads/main:refs/remotes/origin/main && break
+              [ "$i" -eq 3 ] && { echo "ERROR: git fetch failed after 3 attempts"; exit 1; }
               echo "fetch timeout, retrying in 10s..."
               sleep 10
             done
