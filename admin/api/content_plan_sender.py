@@ -456,6 +456,9 @@ async def send_plan_to_telegram(
     Иначе — одно сообщение из полей плана.
     Возвращает {"sent_bot": N, "sent_channel": M, "errors": [...]}.
     """
+    if telegram_client is None:
+        async with httpx.AsyncClient(**tg.telegram_http_kwargs(120.0)) as c:
+            return await send_plan_to_telegram(db, plan, bot_token, admin_id=admin_id, telegram_client=c)
     rows = (
         await db.execute(
             select(DistributionChannel)

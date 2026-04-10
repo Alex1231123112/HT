@@ -5,14 +5,35 @@
 """
 import json
 import logging
+import os
 from typing import Any
 
 import httpx
+
+from config.settings import get_settings
 
 TELEGRAM_API = "https://api.telegram.org"
 PARSE_MODE_HTML = "HTML"
 
 logger = logging.getLogger(__name__)
+
+
+def telegram_http_kwargs(timeout: float = 30.0) -> dict[str, Any]:
+    """Параметры httpx.AsyncClient для api.telegram.org (TELEGRAM_PROXY / HTTPS_PROXY, как у бота)."""
+    settings = get_settings()
+    proxy: str | None = None
+    if settings.telegram_proxy and settings.telegram_proxy.strip():
+        proxy = settings.telegram_proxy.strip()
+    else:
+        for key in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+            v = os.environ.get(key)
+            if v and v.strip():
+                proxy = v.strip()
+                break
+    kw: dict[str, Any] = {"timeout": timeout}
+    if proxy:
+        kw["proxy"] = proxy
+    return kw
 
 
 async def send_text(
@@ -30,7 +51,7 @@ async def send_text(
     if reply_markup is not None:
         payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
-        async with httpx.AsyncClient(timeout=30.0) as c:
+        async with httpx.AsyncClient(**telegram_http_kwargs(30.0)) as c:
             return await _post(c, url, payload)
     return await _post(client, url, payload)
 
@@ -54,7 +75,7 @@ async def send_photo(
     if reply_markup is not None:
         payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
-        async with httpx.AsyncClient(timeout=30.0) as c:
+        async with httpx.AsyncClient(**telegram_http_kwargs(30.0)) as c:
             return await _post(c, url, payload)
     return await _post(client, url, payload)
 
@@ -78,7 +99,7 @@ async def send_video(
     if reply_markup is not None:
         payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
-        async with httpx.AsyncClient(timeout=60.0) as c:
+        async with httpx.AsyncClient(**telegram_http_kwargs(60.0)) as c:
             return await _post(c, url, payload)
     return await _post(client, url, payload)
 
@@ -150,7 +171,7 @@ async def send_document(
     if reply_markup is not None:
         payload["reply_markup"] = json.dumps(reply_markup)
     if client is None:
-        async with httpx.AsyncClient(timeout=60.0) as c:
+        async with httpx.AsyncClient(**telegram_http_kwargs(60.0)) as c:
             return await _post(c, url, payload)
     return await _post(client, url, payload)
 
@@ -214,7 +235,7 @@ async def _post_multipart(
     """POST multipart/form-data. Возвращает (data, None) при успехе или (None, error_message)."""
     try:
         if client is None:
-            async with httpx.AsyncClient(timeout=timeout) as c:
+            async with httpx.AsyncClient(**telegram_http_kwargs(timeout)) as c:
                 r = await c.post(url, data=data, files=files)
         else:
             r = await client.post(url, data=data, files=files)
