@@ -1,5 +1,5 @@
 # HTTP CONNECT через сеть Tor — для TELEGRAM_PROXY=http://tor:8118 (см. docker-compose, профиль tor)
-User tor
+# Не указывать User: в Docker процесс уже USER tor (см. Dockerfile.tor); иначе Tor падает с «Problem with User value».
 DataDirectory /var/lib/tor
 
 SocksPort 0.0.0.0:9050
