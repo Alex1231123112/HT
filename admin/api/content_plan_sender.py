@@ -486,8 +486,7 @@ async def send_plan_to_telegram(
 
     if items:
         # Несколько сообщений в плане: отправляем по порядку
-        for row in items:
-            item_entity = row[0]
+        for item_entity in items:
             title, description, media_url, event_id = await get_item_message(db, item_entity)
             sb, sc, errs = await _send_one_message(
                 db, bot_token, rows, title, description, media_url, event_id=event_id, **send_kw

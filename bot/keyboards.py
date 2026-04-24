@@ -6,7 +6,7 @@ settings = get_settings()
 
 # Тексты кнопок (должны совпадать с проверкой в хендлерах)
 BTN_PROMOTIONS = "🎁 Акции"
-BTN_NEWS = "📰 Новинки"
+BTN_NEWS = "📰 Новости"
 BTN_DELIVERIES = "📦 Приходы"
 BTN_EVENTS = "🎪 Мероприятия"
 BTN_MANAGER = "💬 Менеджер"
