@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
@@ -186,6 +186,23 @@ async def _scheduled_s3_cleanup_worker() -> None:
         finally:
             SCHEDULED_DURATION.labels(task=task).observe(time.monotonic() - start)
         await asyncio.sleep(interval_hours * 3600)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def api_root() -> HTMLResponse:
+    """Корень API без маршрута раньше давал 404 JSON — путают с админкой при заходе на :8000."""
+    body = (
+        "<!doctype html><html lang=ru><meta charset=utf-8>"
+        "<title>Bot Admin API</title>"
+        "<body style=font-family:system-ui,sans-serif;max-width:36rem;margin:2rem;line-height:1.5>"
+        "<h1>Это API (порт 8000)</h1>"
+        "<p>Админ-панель отдаётся через nginx на <strong>порту 80</strong>. "
+        "Если в адресе есть <code>:8000</code> — уберите его и откройте главную страницу снова.</p>"
+        "<p><a href=/docs>Документация OpenAPI (/docs)</a> · "
+        "<a href=/health>Проверка /health</a></p>"
+        "</body></html>"
+    )
+    return HTMLResponse(body)
 
 
 @app.get("/health", response_model=GenericMessage)
