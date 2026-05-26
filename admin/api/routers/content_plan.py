@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from admin.api.content_plan_sender import send_plan_to_telegram
+from admin.api.content_plan_sender import send_plan_to_telegram, try_claim_content_plan
 from admin.api.deps import get_current_admin, require_roles, verify_csrf
 from admin.api.html_sanitizer import sanitize_html_for_telegram
 from admin.api.schemas import (
@@ -279,12 +279,33 @@ async def send_plan_now(
             status_code=500,
             detail="BOT_TOKEN не задан в .env. Укажите токен бота для отправки в Telegram.",
         )
-    result = await send_plan_to_telegram(db, plan, settings.bot_token, admin_id=admin.id)
-    plan.status = ContentPlanStatus.SENT
-    plan.sent_at = datetime.utcnow()
-    db.add(plan)
-    db.add(ActivityLog(admin_id=admin.id, action="send_content_plan", details=f"plan_id={plan_id}"))
-    await db.commit()
+    now = datetime.utcnow()
+    if plan.status == ContentPlanStatus.SCHEDULED:
+        if not await try_claim_content_plan(db, plan, now):
+            raise HTTPException(status_code=400, detail="Plan already sent")
+    else:
+        res = await db.execute(
+            update(ContentPlan)
+            .where(
+                ContentPlan.id == plan_id,
+                ContentPlan.status != ContentPlanStatus.SENT,
+                ContentPlan.status != ContentPlanStatus.CANCELLED,
+            )
+            .values(status=ContentPlanStatus.SENT, sent_at=now)
+        )
+        if res.rowcount == 0:
+            raise HTTPException(status_code=400, detail="Plan already sent")
+        await db.commit()
+        plan.status = ContentPlanStatus.SENT
+        plan.sent_at = now
+    try:
+        result = await send_plan_to_telegram(db, plan, settings.bot_token, admin_id=admin.id)
+        db.add(ActivityLog(admin_id=admin.id, action="send_content_plan", details=f"plan_id={plan_id}"))
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.exception("Content plan %s manual send failed after claim: %s", plan_id, e)
+        raise HTTPException(status_code=500, detail="Отправка прервана. План помечен как отправленный; проверьте логи доставки.") from e
     total = result["sent_bot"] + result["sent_channel"]
     channels_count = result.get("channels_count", 0)
     hint = None

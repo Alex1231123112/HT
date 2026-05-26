@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.api import telegram_sender as tg
@@ -20,6 +20,7 @@ from database.models import (
     ContentPlan,
     ContentPlanChannel,
     ContentPlanItem,
+    ContentPlanStatus,
     Delivery,
     DistributionChannel,
     DistributionChannelType,
@@ -324,6 +325,16 @@ async def _send_one_message(
     sent_bot = 0
     sent_channel = 0
     errors: list[str] = []
+    already_sent_targets = set(
+        (
+            await db.scalars(
+                select(TelegramDeliveryLog.target).where(
+                    TelegramDeliveryLog.plan_id == plan_id,
+                    TelegramDeliveryLog.success.is_(True),
+                )
+            )
+        ).all()
+    )
 
     def _log(chan_type: str, target: str, success: bool, err: str | None = None) -> None:
         db.add(
@@ -395,6 +406,9 @@ async def _send_one_message(
         if ch.channel_type == DistributionChannelType.BOT:
             users = list((await db.scalars(select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None)))).all())
             for uid in users:
+                target = f"user:{uid}"
+                if target in already_sent_targets:
+                    continue
                 if media_url_public:
                     ok, err_msg = await _send_media(uid)
                     if not ok:
@@ -409,7 +423,6 @@ async def _send_one_message(
                         bot_token, uid, text, reply_markup=reply_markup, client=telegram_client
                     )
                     result = txt_resp is not None
-                target = f"user:{uid}"
                 if result:
                     sent_bot += 1
                     _log("bot", target, True)
@@ -418,6 +431,8 @@ async def _send_one_message(
                     _log("bot", target, False, err_msg)
         elif ch.channel_type == DistributionChannelType.TELEGRAM_CHANNEL and ch.telegram_ref:
             chat = _normalize_channel_ref(ch.telegram_ref)
+            if chat in already_sent_targets:
+                continue
             if media_url_public:
                 ok, err_msg = await _send_media(chat)
                 if not ok:
@@ -504,31 +519,59 @@ async def send_plan_to_telegram(
     return {"sent_bot": sent_bot, "sent_channel": sent_channel, "errors": errors, "channels_count": channels_count}
 
 
+async def try_claim_content_plan(db: AsyncSession, plan: ContentPlan, now: datetime | None = None) -> bool:
+    """
+    Атомарно переводит план scheduled → sent до рассылки.
+    Если commit после send не прошёл, воркер не будет слать повторно каждую минуту.
+    """
+    if plan.status != ContentPlanStatus.SCHEDULED:
+        return False
+    claim_at = now or datetime.utcnow()
+    res = await db.execute(
+        update(ContentPlan)
+        .where(
+            ContentPlan.id == plan.id,
+            ContentPlan.status == ContentPlanStatus.SCHEDULED,
+        )
+        .values(status=ContentPlanStatus.SENT, sent_at=claim_at)
+    )
+    if res.rowcount == 0:
+        await db.rollback()
+        return False
+    await db.commit()
+    plan.status = ContentPlanStatus.SENT
+    plan.sent_at = claim_at
+    return True
+
+
 async def process_due_content_plans(db: AsyncSession, bot_token: str) -> int:
     """
-    Найти планы со status=scheduled и scheduled_at <= now, отправить в каналы, обновить status=sent.
-    Возвращает количество обработанных планов.
+    Найти планы со status=scheduled и scheduled_at <= now, отправить в каналы.
+    Сначала claim (status=sent), затем рассылка — без повторов при сбое commit после send.
+    Возвращает количество успешно захваченных планов.
     """
-    from database.models import ContentPlanStatus
-
     now = datetime.utcnow()
     due = list(
         (
             await db.scalars(
-                select(ContentPlan).where(
+                select(ContentPlan)
+                .where(
                     ContentPlan.status == ContentPlanStatus.SCHEDULED,
                     ContentPlan.scheduled_at.is_not(None),
                     ContentPlan.scheduled_at <= now,
                 )
+                .order_by(ContentPlan.scheduled_at)
+                .with_for_update(skip_locked=True)
             )
         ).all()
     )
+    processed = 0
     for plan in due:
+        if not await try_claim_content_plan(db, plan, now):
+            continue
+        processed += 1
         try:
             result = await send_plan_to_telegram(db, plan, bot_token)
-            plan.status = ContentPlanStatus.SENT
-            plan.sent_at = now
-            db.add(plan)
             await db.commit()
             logger.info(
                 "Content plan %s sent: bot=%s channel=%s errors=%s",
@@ -537,7 +580,10 @@ async def process_due_content_plans(db: AsyncSession, bot_token: str) -> int:
                 result["sent_channel"],
                 result["errors"],
             )
-        except Exception as e:
+        except Exception:
             await db.rollback()
-            logger.exception("Content plan %s send failed: %s", plan.id, e)
-    return len(due)
+            logger.exception(
+                "Content plan %s send failed after claim (status stays sent, no retry loop)",
+                plan.id,
+            )
+    return processed
