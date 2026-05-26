@@ -43,7 +43,7 @@ async def test_try_claim_content_plan_marks_sent_before_send():
 
 
 async def test_process_due_does_not_resend_after_claim():
-    plan = await _create_scheduled_plan("no loop")
+    await _create_scheduled_plan("no loop")
     send_mock = AsyncMock(return_value={"sent_bot": 1, "sent_channel": 0, "errors": [], "channels_count": 1})
 
     with patch("admin.api.content_plan_sender.send_plan_to_telegram", send_mock):
